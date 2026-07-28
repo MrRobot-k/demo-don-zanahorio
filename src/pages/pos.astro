@@ -1,0 +1,43 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import POSIsland from "@/components/islands/POSIsland";
+import { INVENTORY, isLowStock } from "@/data/inventory";
+---
+
+<Layout title="Punto de venta" description="Sistema POS táctil para el equipo de Don Zanahorio.">
+  <header class="mb-8">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🧑‍🍳 Portal interno
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Punto de venta</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Interfaz optimizada para tablets y pantallas táctiles en caja.
+    </p>
+    <p class="glass mt-4 inline-block rounded-full px-4 py-2 text-xs text-carrot-50/60">
+      🔒 Vista de demostración — en producción este módulo requiere inicio de sesión de empleado.
+    </p>
+  </header>
+
+  <POSIsland client:load />
+
+  <section class="glass mt-10 rounded-2xl p-5">
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-carrot-300">Inventario en tiempo real</h2>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {INVENTORY.map((item) => (
+        <div class="glass glass-card flex items-center justify-between rounded-xl p-4">
+          <div>
+            <p class="text-sm font-medium">{item.ingredient}</p>
+            <p class="text-xs text-carrot-50/50">
+              {item.stock} {item.unit} disponibles
+            </p>
+          </div>
+          {isLowStock(item) && (
+            <span class="rounded-full bg-red-500/20 px-2 py-1 text-[10px] font-semibold text-red-300">
+              Stock bajo
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  </section>
+</Layout>

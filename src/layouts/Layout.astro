@@ -1,0 +1,40 @@
+---
+import Navbar from "@/components/Navbar.astro";
+import Footer from "@/components/Footer.astro";
+import "@/styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = "Don Zanahorio — cocina fresca y saludable en Ciudad Victoria, Tamaulipas.",
+} = Astro.props;
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} · Don Zanahorio</title>
+  </head>
+  <body>
+    <div class="ambient-bg">
+      <div class="ambient-blob h-[26rem] w-[26rem] bg-carrot-500 -left-20 -top-20"></div>
+      <div class="ambient-blob h-[22rem] w-[22rem] bg-leaf-500 -right-10 top-1/3" style="animation-delay: -6s"></div>
+      <div class="ambient-blob h-[24rem] w-[24rem] bg-carrot-700 left-1/3 -bottom-24" style="animation-delay: -12s"></div>
+    </div>
+
+    <Navbar />
+    <main class="mx-auto min-h-[60vh] max-w-6xl px-3 py-10 sm:px-6 sm:py-16">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

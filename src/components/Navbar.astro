@@ -1,0 +1,82 @@
+---
+import { NAV_LINKS, PORTAL_LINKS, SITE, whatsappLink } from "@/data/site";
+import CartBadge from "@/components/islands/CartBadge";
+
+const currentPath = Astro.url.pathname;
+---
+
+<header class="sticky top-0 z-40 px-3 pt-3 sm:px-6 sm:pt-4">
+  <nav class="glass-strong mx-auto flex max-w-6xl items-center justify-between rounded-2xl px-4 py-2.5 sm:px-5">
+    <a href="/" class="flex items-center gap-2 shrink-0">
+      <span class="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-carrot-400 to-leaf-500 text-lg shadow-glass">
+        🥕
+      </span>
+      <span class="hidden text-sm font-semibold tracking-wide text-carrot-50 sm:block">
+        {SITE.name}
+      </span>
+    </a>
+
+    <div class="hidden items-center gap-1 lg:flex">
+      {NAV_LINKS.map((link) => (
+        <a
+          href={link.href}
+          class:list={[
+            "rounded-full px-3 py-1.5 text-sm transition-colors",
+            currentPath === link.href
+              ? "bg-carrot-500/20 text-carrot-200"
+              : "text-carrot-50/80 hover:text-carrot-200",
+          ]}
+        >
+          {link.label}
+        </a>
+      ))}
+      <div class="mx-1 h-5 w-px bg-carrot-50/15"></div>
+      <details class="group relative">
+        <summary class="flex cursor-pointer list-none items-center gap-1 rounded-full px-3 py-1.5 text-sm text-carrot-50/80 hover:text-carrot-200">
+          Portal interno
+        </summary>
+        <div class="glass-strong absolute right-0 mt-2 w-56 rounded-xl p-1.5">
+          {PORTAL_LINKS.map((link) => (
+            <a
+              href={link.href}
+              class="block rounded-lg px-3 py-2 text-sm text-carrot-50/85 hover:bg-carrot-50/10 hover:text-carrot-200"
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+      </details>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a
+        href={whatsappLink("¡Hola! Quiero hacer un pedido en Don Zanahorio 🥕")}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="hidden rounded-full bg-leaf-500 px-4 py-2 text-sm font-semibold text-ink-950 shadow-glass transition hover:bg-leaf-400 sm:block"
+      >
+        Pedir por WhatsApp
+      </a>
+      <CartBadge client:load />
+      <details class="group relative lg:hidden">
+        <summary class="glass flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full text-carrot-100">
+          <span class="sr-only">Menú</span>
+          ☰
+        </summary>
+        <div class="glass-strong absolute right-0 mt-2 w-60 rounded-xl p-1.5">
+          {NAV_LINKS.map((link) => (
+            <a href={link.href} class="block rounded-lg px-3 py-2 text-sm text-carrot-50/85 hover:bg-carrot-50/10">
+              {link.label}
+            </a>
+          ))}
+          <div class="my-1 h-px bg-carrot-50/15"></div>
+          {PORTAL_LINKS.map((link) => (
+            <a href={link.href} class="block rounded-lg px-3 py-2 text-sm text-carrot-50/85 hover:bg-carrot-50/10">
+              {link.label}
+            </a>
+          ))}
+        </div>
+      </details>
+    </div>
+  </nav>
+</header>

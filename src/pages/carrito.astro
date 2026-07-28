@@ -1,0 +1,15 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import CartCheckout from "@/components/islands/CartCheckout";
+---
+
+<Layout title="Carrito" description="Revisa tu pedido y elige entrega o recolección en tienda.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🛒 Tu carrito
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Finaliza tu pedido</h1>
+  </header>
+
+  <CartCheckout client:load />
+</Layout>

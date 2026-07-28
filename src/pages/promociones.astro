@@ -1,0 +1,30 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import PromotionsBoard from "@/components/islands/PromotionsBoard";
+import GoogleReviewLink from "@/components/islands/GoogleReviewLink";
+import { SITE } from "@/data/site";
+---
+
+<Layout title="Promociones" description="Cupones automáticos, descuentos exclusivos web y productos destacados.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🏷️ Promociones
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Cupones y descuentos vigentes</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Aplica estos cupones directamente en tu carrito. Los descuentos web son exclusivos para pedidos en línea.
+    </p>
+  </header>
+
+  <PromotionsBoard client:load />
+
+  <section class="glass-strong mt-16 rounded-[2rem] px-6 py-12 text-center sm:px-14">
+    <span class="text-4xl">⭐</span>
+    <h2 class="mt-4 text-2xl font-bold sm:text-3xl">Déjanos tu reseña en Google</h2>
+    <p class="mx-auto mt-3 max-w-xl text-sm text-carrot-50/70">
+      Comparte tu experiencia en {SITE.city} y recibe un cupón de 20% para tu próxima visita. Registramos tu reseña
+      para hacerte llegar el beneficio.
+    </p>
+    <GoogleReviewLink client:load className="mt-6" />
+  </section>
+</Layout>

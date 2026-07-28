@@ -1,0 +1,23 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import PlansList from "@/components/islands/PlansList";
+---
+
+<Layout title="Suscripciones" description="Membresías mensuales con precio preferencial, validadas por QR o teléfono.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🔁 Membresías
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Suscripciones mensuales</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Precio preferencial todos los días. Se valida con tu código QR o número telefónico, tanto en sucursal como a
+      domicilio.
+    </p>
+  </header>
+
+  <PlansList client:load />
+
+  <p class="mt-8 text-center text-xs text-carrot-50/50">
+    Todos los planes se pueden cancelar en cualquier momento desde tu cuenta de fidelización.
+  </p>
+</Layout>

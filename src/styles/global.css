@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+
+  /* Zanahoria — naranja cálido de marca */
+  --color-carrot-50: #fff4ec;
+  --color-carrot-100: #ffe4cf;
+  --color-carrot-200: #ffc79b;
+  --color-carrot-300: #ffa25e;
+  --color-carrot-400: #ff8a3d;
+  --color-carrot-500: #ff7a1a;
+  --color-carrot-600: #f2620a;
+  --color-carrot-700: #c94b08;
+  --color-carrot-800: #9e3b0d;
+  --color-carrot-900: #7f320f;
+
+  /* Hoja de zanahoria — verde fresco */
+  --color-leaf-50: #eefdf3;
+  --color-leaf-100: #d5f9e0;
+  --color-leaf-200: #adf1c4;
+  --color-leaf-300: #74e29f;
+  --color-leaf-400: #3fca7a;
+  --color-leaf-500: #1fae5f;
+  --color-leaf-600: #148c4c;
+  --color-leaf-700: #126f3f;
+  --color-leaf-800: #125835;
+  --color-leaf-900: #10482d;
+
+  /* Fondo "tierra" profundo para el efecto de vidrio */
+  --color-ink-950: #0f0b09;
+  --color-ink-900: #17110d;
+  --color-ink-800: #241a13;
+  --color-ink-700: #33241a;
+
+  --shadow-glass: 0 8px 32px 0 rgba(15, 11, 9, 0.45);
+  --shadow-glass-lg: 0 24px 64px -12px rgba(15, 11, 9, 0.6);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ink-950);
+    color: var(--color-carrot-50);
+    font-family: var(--font-sans);
+    min-height: 100svh;
+  }
+
+  ::selection {
+    background-color: var(--color-carrot-500);
+    color: var(--color-ink-950);
+  }
+}
+
+@layer components {
+  /* Fondo ambiental con manchas de color desenfocadas, fijo detrás de todo */
+  .ambient-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 0%, rgba(255, 122, 26, 0.35), transparent 60%),
+      radial-gradient(ellipse 70% 60% at 100% 20%, rgba(31, 174, 95, 0.28), transparent 55%),
+      radial-gradient(ellipse 60% 50% at 50% 100%, rgba(255, 138, 61, 0.2), transparent 60%),
+      var(--color-ink-950);
+  }
+
+  .ambient-blob {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(90px);
+    opacity: 0.55;
+    animation: float 18s ease-in-out infinite;
+  }
+
+  .glass {
+    background: rgba(255, 244, 236, 0.06);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 244, 236, 0.14);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-strong {
+    background: rgba(255, 244, 236, 0.1);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid rgba(255, 244, 236, 0.18);
+    box-shadow: var(--shadow-glass-lg);
+  }
+
+  .glass-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .glass-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255, 138, 61, 0.4);
+  }
+
+  .text-gradient {
+    background: linear-gradient(100deg, var(--color-carrot-300), var(--color-leaf-300));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(3%, 4%) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob {
+    animation: none;
+  }
+}

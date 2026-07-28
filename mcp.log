@@ -1,0 +1,25 @@
+2026-07-27 20:23:22 - Initializing server 'playwright-python-server'
+2026-07-27 20:23:22 - Registering handler for ListToolsRequest
+2026-07-27 20:23:22 - Registering handler for CallToolRequest
+2026-07-27 20:23:22 - Registering handler for ListResourcesRequest
+2026-07-27 20:23:22 - Registering handler for ReadResourceRequest
+2026-07-27 20:23:22 - Registering handler for PromptListRequest
+2026-07-27 20:23:22 - Registering handler for GetPromptRequest
+2026-07-27 20:23:22 - Registering handler for ListResourceTemplatesRequest
+2026-07-27 20:23:22 - Starting MCP Playwright server
+2026-07-27 20:23:22 - Starting MCP Playwright server via package entry point
+2026-07-27 20:23:22 - Using selector: EpollSelector
+2026-07-27 20:23:22 - Received message: root=InitializedNotification(method='notifications/initialized', params=None, jsonrpc='2.0')
+2026-07-27 20:23:22 - Received message: <mcp.shared.session.RequestResponder object at 0x7f753d2920d0>
+2026-07-27 20:23:22 - Processing request of type ListToolsRequest
+2026-07-27 20:23:22 - Dispatching request of type ListToolsRequest
+2026-07-27 20:23:22 - Response sent
+2026-07-27 20:23:32 - Received message: <mcp.shared.session.RequestResponder object at 0x7f753d292210>
+2026-07-27 20:23:32 - Processing request of type ListResourcesRequest
+2026-07-27 20:23:32 - Dispatching request of type ListResourcesRequest
+2026-07-27 20:23:32 - Listing resources
+2026-07-27 20:23:32 - Response sent
+2026-07-27 20:23:32 - Received message: <mcp.shared.session.RequestResponder object at 0x7f753d281220>
+2026-07-27 20:23:32 - Processing request of type ListPromptsRequest
+2026-07-27 20:23:32 - Dispatching request of type ListPromptsRequest
+2026-07-27 20:23:32 - Response sent

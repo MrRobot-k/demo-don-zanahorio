@@ -1,0 +1,18 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import SurveyForm from "@/components/islands/SurveyForm";
+---
+
+<Layout title="Encuestas" description="Encuesta de satisfacción, evaluación de sucursal y votación de cajero favorito.">
+  <header class="mb-10 text-center">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      📝 Encuesta de satisfacción
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Cuéntanos cómo estuvo tu visita</h1>
+    <p class="mx-auto mt-3 max-w-xl text-sm text-carrot-50/70 sm:text-base">
+      Tu opinión nos ayuda a mejorar y a reconocer al equipo que te atendió.
+    </p>
+  </header>
+
+  <SurveyForm client:load />
+</Layout>

@@ -1,0 +1,18 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import EmployeePortal from "@/components/islands/EmployeePortal";
+---
+
+<Layout title="Portal de empleados" description="Capacitación, manuales, recomendación de candidatos y bolsa de trabajo.">
+  <header class="mb-8">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🧑‍🍳 Portal interno
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Portal de empleados</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Capacitación, manuales de puesto, recomendación de candidatos y reclutamiento, compatible con tablets.
+    </p>
+  </header>
+
+  <EmployeePortal client:load />
+</Layout>

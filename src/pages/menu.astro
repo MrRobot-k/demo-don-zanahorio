@@ -1,0 +1,19 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import MenuCatalog from "@/components/islands/MenuCatalog";
+---
+
+<Layout title="Menú digital" description="Explora el menú completo de Don Zanahorio y arma tu pedido.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🍽️ Menú digital
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Elige, agrega y ordena</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Todo nuestro catálogo, siempre actualizado. Agrega tus platillos favoritos al carrito y finaliza tu pedido
+      para recoger en tienda o recibirlo a domicilio.
+    </p>
+  </header>
+
+  <MenuCatalog client:load />
+</Layout>
