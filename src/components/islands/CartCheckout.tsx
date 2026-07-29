@@ -1,11 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "@nanostores/react";
 import { Minus, Plus, ShoppingBasket, Trash2 } from "lucide-react";
 import { $cartLines, $cartTotal, clearCart, removeFromCart, setQty } from "@/stores/cart";
 import { SITE, whatsappLink } from "@/data/site";
-import { fetchCoupons, submitOrder } from "@/lib/queries";
+import { fetchCoupons, submitOrder, awardOrderPoints, lookupLoyaltyCustomer } from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { $loyaltyContact } from "@/stores/loyalty";
 import { cn, formatMXN } from "@/lib/utils";
+import { useMounted } from "@/hooks/useMounted";
+import { computeSubscriptionDiscount } from "@/lib/subscriptionDiscount";
 
 type Fulfillment = "pickup" | "delivery";
 type Payment = "card" | "cash";
@@ -13,16 +16,25 @@ type Payment = "card" | "cash";
 export default function CartCheckout() {
   const lines = useStore($cartLines);
   const subtotal = useStore($cartTotal);
+  // Cart contents live in localStorage, invisible to the server: pretend the
+  // cart is empty (the SSR-safe default) until after hydration so the first
+  // client render matches the server-rendered markup.
+  const mounted = useMounted();
+  const displayLines = mounted ? lines : [];
+  const savedContact = useStore($loyaltyContact);
   const { data: coupons } = useSupabaseData(fetchCoupons);
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
   const [payment, setPayment] = useState<Payment>("card");
   const [address, setAddress] = useState("");
+  const [loyaltyContact, setLoyaltyContact] = useState(savedContact ?? "");
+  const [subscriberPlanId, setSubscriberPlanId] = useState<string | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponNote, setCouponNote] = useState("");
   const [couponError, setCouponError] = useState("");
   const [confirmedOrder, setConfirmedOrder] = useState<number | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
@@ -39,7 +51,33 @@ export default function CartCheckout() {
     return Math.round(subtotal * (match.discountPercent / 100));
   }, [appliedCoupon, coupons, subtotal]);
 
-  const total = Math.max(subtotal + shipping - discount, 0);
+  const subscriptionDiscount = useMemo(
+    () => computeSubscriptionDiscount(subscriberPlanId, lines, subtotal),
+    [subscriberPlanId, lines, subtotal]
+  );
+
+  const total = Math.max(subtotal + shipping - discount - (subscriptionDiscount?.amount ?? 0), 0);
+
+  async function lookupSubscriberPlan(contact: string) {
+    const trimmed = contact.trim();
+    if (!trimmed) {
+      setSubscriberPlanId(null);
+      return;
+    }
+    try {
+      const profile = await lookupLoyaltyCustomer(trimmed);
+      setSubscriberPlanId(profile?.activePlanId ?? null);
+    } catch {
+      setSubscriberPlanId(null);
+    }
+  }
+
+  // Auto-apply the discount if the shopper is already logged into loyalty
+  // elsewhere on the site (their contact pre-fills this field).
+  useEffect(() => {
+    if (savedContact) lookupSubscriberPlan(savedContact);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function applyCoupon() {
     const code = couponInput.trim().toUpperCase();
@@ -60,20 +98,47 @@ export default function CartCheckout() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      await submitOrder({
+      const totalDiscount = discount + (subscriptionDiscount?.amount ?? 0);
+      const orderId = await submitOrder({
         fulfillmentType: fulfillment,
         address: fulfillment === "delivery" ? address.trim() : null,
         paymentMethod: payment,
         subtotal,
         shippingCost: shipping,
-        discount,
+        discount: totalDiscount,
         couponCode: appliedCoupon,
         total,
         items: lines.map((l) => ({ name: l.name, price: l.price, qty: l.qty })),
       });
+
+      if (loyaltyContact.trim()) {
+        awardOrderPoints(orderId, loyaltyContact.trim()).catch(() => {});
+      }
+
+      if (payment === "card") {
+        setRedirecting(true);
+        const res = await fetch("/api/checkout/create-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId,
+            items: lines.map((l) => ({ name: l.name, price: l.price, qty: l.qty })),
+            shippingCost: shipping,
+            discount: totalDiscount,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) {
+          throw new Error(data.error ?? "No se pudo iniciar el pago con tarjeta.");
+        }
+        window.location.href = data.url;
+        return;
+      }
+
       const orderNumber = Math.floor(1000 + Math.random() * 9000);
       setConfirmedOrder(orderNumber);
     } catch (err) {
+      setRedirecting(false);
       setSubmitError(err instanceof Error ? err.message : "No se pudo registrar tu pedido. Intenta de nuevo.");
     } finally {
       setSubmitting(false);
@@ -118,7 +183,7 @@ export default function CartCheckout() {
     );
   }
 
-  if (lines.length === 0) {
+  if (displayLines.length === 0) {
     return (
       <div className="glass mx-auto max-w-lg rounded-3xl p-10 text-center">
         <ShoppingBasket className="mx-auto text-carrot-300" size={40} />
@@ -228,6 +293,22 @@ export default function CartCheckout() {
             ))}
           </div>
         </div>
+
+        <div className="mt-6">
+          <p className="mb-2 text-sm font-semibold">Fidelización (opcional)</p>
+          <input
+            type="text"
+            value={loyaltyContact}
+            onChange={(e) => setLoyaltyContact(e.target.value)}
+            onBlur={(e) => lookupSubscriberPlan(e.target.value)}
+            placeholder="Tu correo o teléfono registrado"
+            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400"
+          />
+          <p className="mt-1.5 text-xs text-carrot-50/50">Gana 10% de puntos sobre tu compra en tu monedero.</p>
+          {subscriptionDiscount && (
+            <p className="mt-1.5 text-xs text-leaf-300">🥕 Suscripción activa: {subscriptionDiscount.label} ✓</p>
+          )}
+        </div>
       </div>
 
       <div className="glass-strong h-fit rounded-2xl p-5">
@@ -268,6 +349,12 @@ export default function CartCheckout() {
               <dd>-{formatMXN(discount)}</dd>
             </div>
           )}
+          {subscriptionDiscount && (
+            <div className="flex justify-between text-leaf-300">
+              <dt>{subscriptionDiscount.label}</dt>
+              <dd>-{formatMXN(subscriptionDiscount.amount)}</dd>
+            </div>
+          )}
           <div className="flex justify-between border-t border-carrot-50/15 pt-3 text-base font-bold">
             <dt>Total</dt>
             <dd>{formatMXN(total)}</dd>
@@ -279,10 +366,16 @@ export default function CartCheckout() {
         <button
           type="button"
           onClick={confirmOrder}
-          disabled={submitting || (fulfillment === "delivery" && address.trim().length < 6)}
+          disabled={submitting || redirecting || (fulfillment === "delivery" && address.trim().length < 6)}
           className="mt-6 w-full rounded-full bg-carrot-500 py-3 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {submitting ? "Enviando..." : "Confirmar pedido"}
+          {redirecting
+            ? "Redirigiendo a pago seguro..."
+            : submitting
+              ? "Enviando..."
+              : payment === "card"
+                ? "Ir a pagar con tarjeta"
+                : "Confirmar pedido"}
         </button>
       </div>
     </div>

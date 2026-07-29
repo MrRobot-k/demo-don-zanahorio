@@ -1,0 +1,29 @@
+---
+import "@/styles/global.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} · Don Zanahorio Admin</title>
+  </head>
+  <body>
+    <div class="ambient-bg">
+      <div class="ambient-blob h-[26rem] w-[26rem] bg-carrot-500 -left-20 -top-20"></div>
+      <div class="ambient-blob h-[22rem] w-[22rem] bg-leaf-500 -right-10 top-1/3" style="animation-delay: -6s"></div>
+      <div class="ambient-blob h-[24rem] w-[24rem] bg-carrot-700 left-1/3 -bottom-24" style="animation-delay: -12s"></div>
+    </div>
+    <slot />
+  </body>
+</html>

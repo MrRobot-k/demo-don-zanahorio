@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useStore } from "@nanostores/react";
 import { Check } from "lucide-react";
 import { $loyaltyProfile, activatePlan } from "@/stores/loyalty";
@@ -7,6 +8,20 @@ import { cn, formatMXN } from "@/lib/utils";
 export default function PlanCard({ plan }: { plan: Plan }) {
   const profile = useStore($loyaltyProfile);
   const isActive = profile?.activePlanId === plan.id;
+  const [activating, setActivating] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleActivate() {
+    setActivating(true);
+    setError("");
+    try {
+      await activatePlan(plan.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo activar el plan.");
+    } finally {
+      setActivating(false);
+    }
+  }
 
   return (
     <div
@@ -41,13 +56,17 @@ export default function PlanCard({ plan }: { plan: Plan }) {
           Plan activo ✓
         </div>
       ) : profile ? (
-        <button
-          type="button"
-          onClick={() => activatePlan(plan.id)}
-          className="mt-6 rounded-full bg-carrot-500 py-2.5 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400"
-        >
-          Activar suscripción
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={handleActivate}
+            disabled={activating}
+            className="mt-6 rounded-full bg-carrot-500 py-2.5 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400 disabled:opacity-40"
+          >
+            {activating ? "Activando..." : "Activar suscripción"}
+          </button>
+          {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+        </>
       ) : (
         <a
           href="/fidelizacion"

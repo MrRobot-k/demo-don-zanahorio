@@ -42,4 +42,5 @@ export const NAV_LINKS = [
 export const PORTAL_LINKS = [
   { href: "/pos", label: "Punto de venta (POS)" },
   { href: "/empleados", label: "Portal de empleados" },
+  { href: "/admin", label: "Panel administrativo" },
 ] as const;

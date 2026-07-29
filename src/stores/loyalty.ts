@@ -1,60 +1,58 @@
 import { persistentAtom } from "@nanostores/persistent";
+import { atom } from "nanostores";
+import {
+  registerLoyaltyCustomer,
+  lookupLoyaltyCustomer,
+  activateSubscription,
+  type LoyaltySnapshot,
+} from "@/lib/queries";
 
-export type LoyaltyProfile = {
-  name: string;
-  contact: string;
-  memberId: string;
-  points: number;
-  walletBalance: number;
-  giftCardBalance: number;
-  referralCode: string;
-  joinedAt: string;
-  activePlanId?: string;
-};
+export type LoyaltyProfile = LoyaltySnapshot;
 
-export const $loyaltyProfile = persistentAtom<LoyaltyProfile | null>(
-  "dz-loyalty",
-  null,
-  {
-    encode: JSON.stringify,
-    decode: (raw) => {
-      try {
-        return JSON.parse(raw) as LoyaltyProfile;
-      } catch {
-        return null;
-      }
-    },
+/** Only remembers *which* contact is signed in on this device — the balances always come from Supabase. */
+export const $loyaltyContact = persistentAtom<string | undefined>("dz-loyalty-contact", undefined);
+export const $loyaltyProfile = atom<LoyaltyProfile | null>(null);
+export const $loyaltyLoading = atom(false);
+
+export async function restoreLoyaltySession() {
+  const contact = $loyaltyContact.get();
+  if (!contact) return;
+  $loyaltyLoading.set(true);
+  try {
+    const snapshot = await lookupLoyaltyCustomer(contact);
+    $loyaltyProfile.set(snapshot);
+    if (!snapshot) $loyaltyContact.set(undefined);
+  } finally {
+    $loyaltyLoading.set(false);
   }
-);
+}
 
-export function registerLoyalty(name: string, contact: string) {
-  const memberId = `DZ-${Math.floor(1000 + Math.random() * 9000)}`;
-  const profile: LoyaltyProfile = {
-    name,
-    contact,
-    memberId,
-    points: 150,
-    walletBalance: 50,
-    giftCardBalance: 0,
-    referralCode: memberId.replace("DZ-", "AMIGO"),
-    joinedAt: new Date().toISOString(),
-  };
-  $loyaltyProfile.set(profile);
-  return profile;
+export async function registerLoyalty(name: string, contact: string, referralCode?: string) {
+  const snapshot = await registerLoyaltyCustomer(name, contact, referralCode);
+  $loyaltyContact.set(contact);
+  $loyaltyProfile.set(snapshot);
+  return snapshot;
+}
+
+export async function loginLoyalty(contact: string) {
+  const snapshot = await lookupLoyaltyCustomer(contact);
+  if (!snapshot) {
+    throw new Error("No encontramos una cuenta con ese correo o teléfono.");
+  }
+  $loyaltyContact.set(contact);
+  $loyaltyProfile.set(snapshot);
+  return snapshot;
 }
 
 export function logoutLoyalty() {
+  $loyaltyContact.set(undefined);
   $loyaltyProfile.set(null);
 }
 
-export function activatePlan(planId: string) {
-  const current = $loyaltyProfile.get();
-  if (!current) return;
-  $loyaltyProfile.set({ ...current, activePlanId: planId });
+export async function activatePlan(planSlug: string) {
+  const contact = $loyaltyContact.get();
+  if (!contact) throw new Error("Necesitas una cuenta de fidelización para activar un plan.");
+  const snapshot = await activateSubscription(contact, planSlug);
+  $loyaltyProfile.set(snapshot);
+  return snapshot;
 }
-
-export const MOCK_PURCHASE_HISTORY = [
-  { date: "12 jul 2026", item: "Bowl Quinoa & Zanahoria Asada", total: 129, pointsEarned: 13 },
-  { date: "05 jul 2026", item: "Jugo Zanahorio Clásico + Pastel de Zanahoria", total: 120, pointsEarned: 12 },
-  { date: "28 jun 2026", item: "Hamburguesa Zanahorio Clásica", total: 119, pointsEarned: 12 },
-];

@@ -1,0 +1,60 @@
+---
+export const prerender = false;
+
+import Layout from "@/layouts/Layout.astro";
+import Stripe from "stripe";
+import { markOrderPaid } from "@/lib/queries";
+
+const sessionId = Astro.url.searchParams.get("session_id");
+const orderId = Astro.url.searchParams.get("order");
+
+let paid = false;
+let errorMessage = "";
+
+if (!sessionId || !orderId) {
+  errorMessage = "Faltan datos de la sesión de pago.";
+} else if (!import.meta.env.STRIPE_SECRET_KEY) {
+  errorMessage = "Los pagos con tarjeta no están configurados en este entorno.";
+} else {
+  try {
+    const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status === "paid") {
+      await markOrderPaid(orderId, sessionId, import.meta.env.INTERNAL_RPC_SECRET);
+      paid = true;
+    } else {
+      errorMessage = "El pago no se completó todavía.";
+    }
+  } catch (err) {
+    errorMessage = err instanceof Error ? err.message : "No se pudo verificar el pago.";
+  }
+}
+---
+
+<Layout title="Pago confirmado" description="Confirmación de pago de tu pedido en Don Zanahorio.">
+  <div class="glass-strong mx-auto max-w-lg rounded-3xl p-8 text-center">
+    {paid ? (
+      <>
+        <span class="text-5xl">✅</span>
+        <h1 class="mt-4 text-2xl font-bold">¡Pago confirmado!</h1>
+        <p class="mt-2 text-sm text-carrot-50/70">
+          Tu pedido #{orderId?.slice(0, 8)} fue pagado con éxito. Te esperamos en Don Zanahorio.
+        </p>
+      </>
+    ) : (
+      <>
+        <span class="text-5xl">⚠️</span>
+        <h1 class="mt-4 text-2xl font-bold">No pudimos confirmar el pago</h1>
+        <p class="mt-2 text-sm text-carrot-50/70">{errorMessage}</p>
+      </>
+    )}
+    <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+      <a
+        href="/menu"
+        class="rounded-full bg-carrot-500 px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-carrot-400"
+      >
+        Seguir explorando el menú
+      </a>
+    </div>
+  </div>
+</Layout>

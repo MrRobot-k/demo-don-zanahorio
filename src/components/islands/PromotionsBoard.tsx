@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getCheapest, getVariants } from "@/data/products";
-import { fetchCoupons, fetchProducts } from "@/lib/queries";
+import { fetchBestSellers, fetchCoupons, fetchNewestProducts, fetchProducts } from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { formatMXN } from "@/lib/utils";
 
@@ -42,9 +42,25 @@ function CouponCard({ coupon }: { coupon: Awaited<ReturnType<typeof fetchCoupons
   );
 }
 
+function ProductPromoCard({ name, subtitle, price }: { name: string; subtitle: string; price: number }) {
+  return (
+    <div className="glass glass-card rounded-2xl p-5">
+      <h3 className="font-semibold">{name}</h3>
+      <p className="mt-1 text-xs text-carrot-50/65">{subtitle}</p>
+      <p className="mt-3 font-bold text-carrot-200">{formatMXN(price)}</p>
+    </div>
+  );
+}
+
 export default function PromotionsBoard() {
   const { data: coupons, error: couponsError, loading: couponsLoading } = useSupabaseData(fetchCoupons);
   const { data: products, error: productsError, loading: productsLoading } = useSupabaseData(fetchProducts);
+  const { data: newest, error: newestError, loading: newestLoading } = useSupabaseData(() => fetchNewestProducts(6));
+  const {
+    data: bestSellers,
+    error: bestSellersError,
+    loading: bestSellersLoading,
+  } = useSupabaseData(() => fetchBestSellers(6));
 
   const cheapest = products ? getCheapest(products, 6) : [];
 
@@ -62,6 +78,42 @@ export default function PromotionsBoard() {
         </section>
       )}
 
+      {newestLoading ? (
+        <p className="mt-16 text-center text-sm text-carrot-50/60">Cargando novedades...</p>
+      ) : newestError ? (
+        <p className="mt-16 text-center text-sm text-red-400">{newestError}</p>
+      ) : newest && newest.length > 0 ? (
+        <section className="mt-16">
+          <h2 className="text-2xl font-bold">🆕 Novedades</h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {newest.map((p) => {
+              const variant = getVariants(p)[0];
+              return <ProductPromoCard key={p.id} name={p.name} subtitle={p.description} price={variant.price} />;
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {bestSellersLoading ? (
+        <p className="mt-16 text-center text-sm text-carrot-50/60">Cargando más vendidos...</p>
+      ) : bestSellersError ? (
+        <p className="mt-16 text-center text-sm text-red-400">{bestSellersError}</p>
+      ) : bestSellers && bestSellers.length > 0 ? (
+        <section className="mt-16">
+          <h2 className="text-2xl font-bold">🔥 Los más vendidos</h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {bestSellers.map((item) => (
+              <ProductPromoCard
+                key={item.name}
+                name={item.name}
+                subtitle={`${item.unitsSold} ${item.unitsSold === 1 ? "vendido" : "vendidos"}`}
+                price={item.price}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {productsLoading ? (
         <p className="mt-16 text-center text-sm text-carrot-50/60">Cargando destacados...</p>
       ) : productsError ? (
@@ -72,13 +124,7 @@ export default function PromotionsBoard() {
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {cheapest.map((p) => {
               const variant = getVariants(p)[0];
-              return (
-                <div key={p.id} className="glass glass-card rounded-2xl p-5">
-                  <h3 className="font-semibold">{p.name}</h3>
-                  <p className="mt-1 text-xs text-carrot-50/65">{p.description}</p>
-                  <p className="mt-3 font-bold text-carrot-200">{formatMXN(variant.price)}</p>
-                </div>
-              );
+              return <ProductPromoCard key={p.id} name={p.name} subtitle={p.description} price={variant.price} />;
             })}
           </div>
         </section>

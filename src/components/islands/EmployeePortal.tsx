@@ -1,57 +1,20 @@
 import { useEffect, useState } from "react";
-import { TRAINING_MODULES, type JobPosition } from "@/data/team";
-import { fetchJobPositions, submitEmployeeReferral, submitJobApplication } from "@/lib/queries";
+import type { JobPosition } from "@/data/team";
+import {
+  fetchJobPositions,
+  fetchTrainingModules,
+  fetchTrainingProgress,
+  markTrainingComplete,
+  submitEmployeeReferral,
+  submitJobApplication,
+  uploadJobApplicationCv,
+} from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { useStaffSession } from "@/hooks/useStaffSession";
+import StaffLogin from "@/components/islands/StaffLogin";
 import { cn } from "@/lib/utils";
 
 type Tab = "capacitacion" | "manuales" | "referidos" | "bolsa";
-
-function LoginGate({ onLogin }: { onLogin: () => void }) {
-  const [user, setUser] = useState("");
-  const [password, setPassword] = useState("");
-
-  return (
-    <form
-      className="glass mx-auto max-w-sm space-y-4 rounded-2xl p-6"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (user.trim() && password.trim()) onLogin();
-      }}
-    >
-      <div className="text-center">
-        <span className="text-3xl">🔐</span>
-        <h2 className="mt-2 text-lg font-bold">Acceso de empleados</h2>
-        <p className="mt-1 text-xs text-carrot-50/60">Demo: cualquier usuario y contraseña te permiten entrar.</p>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold">Usuario</label>
-        <input
-          type="text"
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          required
-          className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-        />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-semibold">Contraseña</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-        />
-      </div>
-      <button
-        type="submit"
-        className="w-full rounded-full bg-carrot-500 py-2.5 text-sm font-semibold text-ink-950 hover:bg-carrot-400"
-      >
-        Entrar
-      </button>
-    </form>
-  );
-}
 
 function PositionSelect({
   positions,
@@ -167,7 +130,7 @@ function JobApplicationForm({ positions }: { positions: JobPosition[] }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [position, setPosition] = useState("");
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -195,7 +158,8 @@ function JobApplicationForm({ positions }: { positions: JobPosition[] }) {
         setSubmitting(true);
         setSubmitError("");
         try {
-          await submitJobApplication({ name: name.trim(), phone: phone.trim(), positionId: position });
+          const cvPath = file ? await uploadJobApplicationCv(file) : null;
+          await submitJobApplication({ name: name.trim(), phone: phone.trim(), positionId: position, cvPath });
           setSent(true);
         } catch (err) {
           setSubmitError(err instanceof Error ? err.message : "No se pudo enviar tu solicitud.");
@@ -232,15 +196,11 @@ function JobApplicationForm({ positions }: { positions: JobPosition[] }) {
         <label className="mb-1.5 block text-sm font-semibold">CV o documentos</label>
         <input
           type="file"
-          onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+          accept=".pdf,.doc,.docx,image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-carrot-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink-950"
         />
-        {fileName && (
-          <p className="mt-1.5 text-xs text-carrot-50/50">
-            {fileName} seleccionado — la carga de archivos aún no está conectada, avísanos por teléfono que lo
-            enviaste.
-          </p>
-        )}
+        {file && <p className="mt-1.5 text-xs text-carrot-50/50">{file.name} seleccionado.</p>}
       </div>
       {submitError && <p className="text-sm text-red-400">{submitError}</p>}
       <button
@@ -255,11 +215,35 @@ function JobApplicationForm({ positions }: { positions: JobPosition[] }) {
 }
 
 export default function EmployeePortal() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const { employee, loading: sessionLoading, login, logout } = useStaffSession();
   const [tab, setTab] = useState<Tab>("capacitacion");
   const { data: positions, error: positionsError, loading: positionsLoading } = useSupabaseData(fetchJobPositions);
+  const [modules, setModules] = useState<Awaited<ReturnType<typeof fetchTrainingModules>> | null>(null);
+  const [modulesError, setModulesError] = useState("");
+  const [progress, setProgress] = useState<string[]>([]);
 
-  if (!loggedIn) return <LoginGate onLogin={() => setLoggedIn(true)} />;
+  // Modules and progress are RLS-gated to logged-in employees, so they can only be
+  // fetched once the Supabase Auth session is actually established (not on first mount).
+  useEffect(() => {
+    if (!employee) return;
+    fetchTrainingModules()
+      .then(setModules)
+      .catch((err) => setModulesError(err instanceof Error ? err.message : "No se pudieron cargar los módulos."));
+    fetchTrainingProgress(employee.id).then(setProgress).catch(() => {});
+  }, [employee]);
+
+  if (sessionLoading) return <p className="text-sm text-carrot-50/60">Cargando sesión...</p>;
+  if (!employee) return <StaffLogin onLogin={login} />;
+
+  async function completeModule(moduleId: string) {
+    if (!employee) return;
+    try {
+      await markTrainingComplete(employee.id, moduleId);
+      setProgress((p) => [...p, moduleId]);
+    } catch {
+      /* ya estaba marcado o RLS lo rechazó */
+    }
+  }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "capacitacion", label: "Capacitación" },
@@ -270,6 +254,32 @@ export default function EmployeePortal() {
 
   return (
     <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-carrot-50/70">
+          Sesión de <span className="font-semibold text-carrot-50">{employee.name}</span>{" "}
+          <span className="rounded-full bg-carrot-50/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-carrot-300">
+            {employee.role === "admin" ? "administrador" : "personal"}
+          </span>
+        </p>
+        <div className="flex items-center gap-2">
+          {employee.role === "admin" && (
+            <a
+              href="/admin"
+              className="rounded-full bg-carrot-50/10 px-4 py-2 text-xs font-semibold text-carrot-50/80 hover:bg-carrot-50/20"
+            >
+              Panel administrativo →
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={logout}
+            className="glass glass-card rounded-full px-4 py-2 text-xs font-semibold text-carrot-50/80"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+
       <div className="glass mb-6 flex flex-wrap gap-2 rounded-2xl p-2">
         {tabs.map((t) => (
           <button
@@ -286,22 +296,42 @@ export default function EmployeePortal() {
         ))}
       </div>
 
-      {tab === "capacitacion" && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {TRAINING_MODULES.map((m) => (
-            <div key={m.id} className="glass glass-card rounded-2xl p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-3xl">{m.emoji}</span>
-                <span className="rounded-full bg-carrot-50/10 px-2 py-1 text-[10px] font-semibold text-carrot-50/70">
-                  {m.type}
-                </span>
-              </div>
-              <h3 className="mt-3 font-semibold">{m.title}</h3>
-              <p className="mt-1 text-xs text-carrot-50/50">{m.duration}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      {tab === "capacitacion" &&
+        (modules === null && !modulesError ? (
+          <p className="text-sm text-carrot-50/60">Cargando módulos...</p>
+        ) : modulesError ? (
+          <p className="text-sm text-red-400">{modulesError}</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {modules?.map((m) => {
+              const done = progress.includes(m.id);
+              return (
+                <div key={m.id} className="glass glass-card rounded-2xl p-5">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full bg-carrot-50/10 px-2 py-1 text-[10px] font-semibold text-carrot-50/70">
+                      {m.type}
+                    </span>
+                    {done && <span className="text-xs font-semibold text-leaf-300">Completado ✓</span>}
+                  </div>
+                  <h3 className="mt-3 font-semibold">{m.title}</h3>
+                  <p className="mt-1 text-xs text-carrot-50/50">{m.duration}</p>
+                  <p className="mt-2 text-xs text-carrot-50/40">
+                    {m.contentUrl ? "Contenido disponible" : "Contenido pendiente de subir por el equipo"}
+                  </p>
+                  {!done && (
+                    <button
+                      type="button"
+                      onClick={() => completeModule(m.id)}
+                      className="mt-3 w-full rounded-full bg-carrot-50/10 py-2 text-xs font-semibold hover:bg-carrot-50/20"
+                    >
+                      Marcar como completado
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
 
       {tab === "manuales" &&
         (positionsLoading ? (
