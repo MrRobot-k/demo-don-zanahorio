@@ -1,15 +1,19 @@
 import { useMemo, useState } from "react";
 import { discountFor, WHOLESALE_ITEMS } from "@/data/wholesale";
-import { SITE, whatsappLink } from "@/data/site";
-import { submitWholesaleOrder } from "@/lib/queries";
+import { whatsappLink } from "@/data/site";
+import { fetchDeliveryZones, submitWholesaleOrder } from "@/lib/queries";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { cn, formatMXN } from "@/lib/utils";
+import { computeShippingCost } from "@/lib/shipping";
 
 type Fulfillment = "pickup" | "delivery";
 
 export default function MayoreoForm() {
+  const { data: zones } = useSupabaseData(fetchDeliveryZones);
   const [itemId, setItemId] = useState(WHOLESALE_ITEMS[0].id);
   const [units, setUnits] = useState(WHOLESALE_ITEMS[0].minUnits);
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
+  const [zoneId, setZoneId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
@@ -20,15 +24,16 @@ export default function MayoreoForm() {
   const [submitError, setSubmitError] = useState("");
 
   const item = WHOLESALE_ITEMS.find((i) => i.id === itemId)!;
+  const selectedZone = zones?.find((z) => z.id === zoneId) ?? null;
 
   const quote = useMemo(() => {
     const discount = discountFor(units);
     const subtotal = units * item.pricePerUnit;
     const discountAmount = Math.round(subtotal * discount);
-    const shipping = fulfillment === "delivery" ? SITE.shipping.baseCost * 2 : 0;
+    const shipping = computeShippingCost({ fulfillment, subtotal, zone: selectedZone, isWholesale: true }).cost;
     const total = subtotal - discountAmount + shipping;
     return { discount, subtotal, discountAmount, shipping, total };
-  }, [units, item, fulfillment]);
+  }, [units, item, fulfillment, selectedZone]);
 
   const canSubmit = name.trim().length > 1 && phone.trim().length >= 10 && units >= item.minUnits;
 
@@ -77,6 +82,8 @@ export default function MayoreoForm() {
               eventDate: eventDate || null,
               notes: notes.trim() || null,
               quoteTotal: quote.total,
+              deliveryZoneId: fulfillment === "delivery" ? zoneId : null,
+              shippingCost: quote.shipping,
             });
             setSubmitted(true);
           } catch (err) {
@@ -133,6 +140,26 @@ export default function MayoreoForm() {
             </button>
           ))}
         </div>
+
+        {fulfillment === "delivery" && (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Zona de entrega</label>
+            <select
+              value={zoneId ?? ""}
+              onChange={(e) => setZoneId(e.target.value || null)}
+              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+            >
+              <option value="" className="bg-ink-900">
+                Selecciona la zona de entrega...
+              </option>
+              {zones?.map((z) => (
+                <option key={z.id} value={z.id} className="bg-ink-900">
+                  {z.name} (~{z.distanceKm} km)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>

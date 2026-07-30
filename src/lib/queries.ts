@@ -156,6 +156,40 @@ export async function fetchJobPositions(): Promise<JobPosition[]> {
   }));
 }
 
+export type DeliveryZone = { id: string; name: string; distanceKm: number };
+
+export async function fetchDeliveryZones(): Promise<DeliveryZone[]> {
+  const { data, error } = await supabase
+    .from("delivery_zones")
+    .select("id, name, distance_km")
+    .eq("active", true)
+    .order("name");
+  if (error) throw error;
+  return data.map((row) => ({ id: row.id, name: row.name, distanceKm: Number(row.distance_km) }));
+}
+
+export type ReviewRewardConfig = {
+  discountPercent: number;
+  validDays: number;
+  cooldownDays: number;
+  active: boolean;
+};
+
+export async function fetchReviewRewardConfig(): Promise<ReviewRewardConfig> {
+  const { data, error } = await supabase
+    .from("review_reward_config")
+    .select("discount_percent, valid_days, cooldown_days, active")
+    .eq("id", 1)
+    .single();
+  if (error) throw error;
+  return {
+    discountPercent: Number(data.discount_percent),
+    validDays: data.valid_days,
+    cooldownDays: data.cooldown_days,
+    active: data.active,
+  };
+}
+
 // =========================================================
 // Escrituras (formularios públicos)
 // =========================================================
@@ -170,6 +204,8 @@ export async function submitOrder(params: {
   couponCode: string | null;
   total: number;
   items: Array<{ name: string; price: number; qty: number }>;
+  deliveryZoneId?: string | null;
+  distanceKm?: number | null;
 }) {
   const orderId = crypto.randomUUID();
 
@@ -183,6 +219,8 @@ export async function submitOrder(params: {
     discount: params.discount,
     coupon_code: params.couponCode,
     total: params.total,
+    delivery_zone_id: params.deliveryZoneId ?? null,
+    distance_km: params.distanceKm ?? null,
   });
   if (orderError) throw orderError;
 
@@ -210,6 +248,8 @@ export async function submitWholesaleOrder(params: {
   eventDate: string | null;
   notes: string | null;
   quoteTotal: number;
+  deliveryZoneId?: string | null;
+  shippingCost?: number;
 }) {
   const { error } = await supabase.from("wholesale_orders").insert({
     customer_name: params.customerName,
@@ -222,27 +262,104 @@ export async function submitWholesaleOrder(params: {
     event_date: params.eventDate,
     notes: params.notes,
     quote_total: params.quoteTotal,
+    delivery_zone_id: params.deliveryZoneId ?? null,
+    shipping_cost: params.shippingCost ?? 0,
   });
   if (error) throw error;
 }
 
-export async function submitSurvey(params: {
+/**
+ * Replaces submitSurvey: inserts the survey and, server-side in the same
+ * transaction, credits the voted cashier's linked employee when the
+ * service rating clears the configured threshold (section 2.5).
+ */
+export async function submitSurveyWithIncentive(params: {
   branchRating: number;
   serviceRating: number;
   cashierId: string | null;
   comments: string | null;
-}) {
-  const { error } = await supabase.from("surveys").insert({
-    branch_rating: params.branchRating,
-    service_rating: params.serviceRating,
-    cashier_id: params.cashierId,
-    comments: params.comments,
+  contact?: string | null;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc("submit_survey_with_incentive", {
+    p_branch_rating: params.branchRating,
+    p_service_rating: params.serviceRating,
+    p_cashier_id: params.cashierId,
+    p_comments: params.comments,
+    p_contact: params.contact ?? null,
   });
   if (error) throw error;
+  return data as string;
 }
 
-export async function submitGoogleReviewClick() {
-  await supabase.from("google_reviews").insert({});
+export type ReviewReward = { code: string; discountPercent: number; expiresAt: string };
+
+/**
+ * Registers who left the Google review (google_reviews.customer_id) and
+ * issues a personal, single-use coupon in the same transaction.
+ */
+export async function claimGoogleReviewReward(contact: string): Promise<ReviewReward> {
+  const { data, error } = await supabase.rpc("claim_google_review_reward", { p_contact: contact });
+  if (error) {
+    const map: Record<string, string> = {
+      cuenta_no_encontrada: "Necesitas una cuenta de fidelización para recibir el cupón. Regístrate en Fidelización primero.",
+      recompensa_no_disponible: "La recompensa por reseñas no está disponible en este momento.",
+      ya_reclamado_recientemente: "Ya reclamaste este beneficio recientemente. Vuelve a intentarlo más adelante.",
+    };
+    const key = Object.keys(map).find((k) => error.message.includes(k));
+    throw new Error(key ? map[key] : error.message);
+  }
+  return { code: data.code, discountPercent: Number(data.discountPercent), expiresAt: data.expiresAt };
+}
+
+export type CustomerCoupon = {
+  id: string;
+  code: string;
+  title: string;
+  discountPercent: number;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+};
+
+export async function fetchCustomerCoupons(contact: string): Promise<CustomerCoupon[]> {
+  const { data, error } = await supabase.rpc("get_customer_coupons", { p_contact: contact });
+  if (error) throw error;
+  return (data ?? []).map(
+    (row: { id: string; code: string; title: string; discount_percent: number; expires_at: string | null; redeemed_at: string | null }) => ({
+      id: row.id,
+      code: row.code,
+      title: row.title,
+      discountPercent: Number(row.discount_percent),
+      expiresAt: row.expires_at,
+      redeemedAt: row.redeemed_at,
+    })
+  );
+}
+
+export type CouponValidation = {
+  kind: "personal" | "global";
+  code: string;
+  discountPercent: number | null;
+  title: string;
+  discountLabel?: string;
+};
+
+/** Server-side validation: checks ownership, redemption and expiry — the client-side lookup did none of that. */
+export async function validateCoupon(code: string, contact: string | null): Promise<CouponValidation | null> {
+  const { data, error } = await supabase.rpc("validate_coupon", { p_code: code, p_contact: contact });
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    kind: data.kind,
+    code: data.code,
+    discountPercent: data.discountPercent != null ? Number(data.discountPercent) : null,
+    title: data.title,
+    discountLabel: data.discountLabel,
+  };
+}
+
+export async function redeemCustomerCoupon(code: string, orderId: string) {
+  const { error } = await supabase.rpc("redeem_customer_coupon", { p_code: code, p_order_id: orderId });
+  if (error) throw error;
 }
 
 export async function submitJobApplication(params: {
@@ -452,6 +569,7 @@ export type AdminSurvey = {
   id: string;
   branchRating: number;
   serviceRating: number;
+  cashierId: string | null;
   cashierName: string | null;
   comments: string | null;
   createdAt: string;
@@ -460,13 +578,14 @@ export type AdminSurvey = {
 export async function fetchAdminSurveys(): Promise<AdminSurvey[]> {
   const { data, error } = await supabase
     .from("surveys")
-    .select("id, branch_rating, service_rating, comments, created_at, cashiers(name)")
+    .select("id, branch_rating, service_rating, cashier_id, comments, created_at, cashiers(name)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data.map((row) => ({
     id: row.id,
     branchRating: row.branch_rating,
     serviceRating: row.service_rating,
+    cashierId: row.cashier_id,
     cashierName: (row.cashiers as unknown as { name: string } | null)?.name ?? null,
     comments: row.comments,
     createdAt: row.created_at,
@@ -616,10 +735,187 @@ export async function claimReferralBonus(id: string) {
   if (error) throw error;
 }
 
-export async function fetchAdminGoogleReviewsCount(): Promise<number> {
-  const { count, error } = await supabase.from("google_reviews").select("id", { count: "exact", head: true });
+export type AdminGoogleReview = {
+  id: string;
+  customerName: string | null;
+  customerContact: string | null;
+  submittedAt: string;
+  rewardGranted: boolean;
+};
+
+export async function fetchAdminGoogleReviews(): Promise<AdminGoogleReview[]> {
+  const { data, error } = await supabase
+    .from("google_reviews")
+    .select("id, submitted_at, reward_granted, customers(name, email, phone)")
+    .order("submitted_at", { ascending: false });
   if (error) throw error;
-  return count ?? 0;
+  return data.map((row) => {
+    const customer = row.customers as unknown as { name: string; email: string | null; phone: string | null } | null;
+    return {
+      id: row.id,
+      customerName: customer?.name ?? null,
+      customerContact: customer ? customer.email ?? customer.phone : null,
+      submittedAt: row.submitted_at,
+      rewardGranted: row.reward_granted,
+    };
+  });
+}
+
+export async function updateReviewRewardConfig(
+  patch: Partial<{ discountPercent: number; validDays: number; cooldownDays: number; active: boolean }>
+) {
+  const { error } = await supabase
+    .from("review_reward_config")
+    .update({
+      discount_percent: patch.discountPercent,
+      valid_days: patch.validDays,
+      cooldown_days: patch.cooldownDays,
+      active: patch.active,
+    })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+export type AdminDeliveryZone = { id: string; name: string; distanceKm: number; active: boolean };
+
+export async function fetchAdminDeliveryZones(): Promise<AdminDeliveryZone[]> {
+  const { data, error } = await supabase.from("delivery_zones").select("id, name, distance_km, active").order("name");
+  if (error) throw error;
+  return data.map((row) => ({ id: row.id, name: row.name, distanceKm: Number(row.distance_km), active: row.active }));
+}
+
+export async function createDeliveryZone(params: { name: string; distanceKm: number }) {
+  const { error } = await supabase.from("delivery_zones").insert({ name: params.name, distance_km: params.distanceKm });
+  if (error) throw error;
+}
+
+export async function updateDeliveryZone(id: string, patch: { name?: string; distanceKm?: number; active?: boolean }) {
+  const { error } = await supabase
+    .from("delivery_zones")
+    .update({ name: patch.name, distance_km: patch.distanceKm, active: patch.active })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export type AdminCashier = {
+  id: string;
+  name: string;
+  role: string;
+  active: boolean;
+  employeeId: string | null;
+  employeeName: string | null;
+};
+
+export async function fetchAdminCashiers(): Promise<AdminCashier[]> {
+  const { data, error } = await supabase
+    .from("cashiers")
+    .select("id, name, role, active, employee_id, employees(name)")
+    .order("name");
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    name: row.name,
+    role: row.role ?? "",
+    active: row.active,
+    employeeId: row.employee_id,
+    employeeName: (row.employees as unknown as { name: string } | null)?.name ?? null,
+  }));
+}
+
+export async function linkCashierToEmployee(cashierId: string, employeeId: string | null) {
+  const { error } = await supabase.from("cashiers").update({ employee_id: employeeId }).eq("id", cashierId);
+  if (error) throw error;
+}
+
+export type AdminEmployee = { id: string; name: string; role: string; active: boolean };
+
+export async function fetchAdminEmployees(): Promise<AdminEmployee[]> {
+  const { data, error } = await supabase.from("employees").select("id, name, role, active").order("name");
+  if (error) throw error;
+  return data.map((row) => ({ id: row.id, name: row.name, role: row.role, active: row.active }));
+}
+
+export type BonusTransaction = {
+  id: string;
+  employeeId: string;
+  employeeName: string | null;
+  amount: number;
+  type: "survey_incentive" | "payout" | "adjustment";
+  note: string | null;
+  createdAt: string;
+};
+
+export async function fetchAdminBonusLedger(): Promise<BonusTransaction[]> {
+  const { data, error } = await supabase
+    .from("employee_bonus_transactions")
+    .select("id, employee_id, amount, type, note, created_at, employees(name)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    employeeId: row.employee_id,
+    employeeName: (row.employees as unknown as { name: string } | null)?.name ?? null,
+    amount: Number(row.amount),
+    type: row.type,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
+}
+
+/** Used by the staff portal ("Mis bonos") — RLS restricts this to the employee's own ledger. */
+export async function fetchEmployeeBonusLedger(employeeId: string): Promise<BonusTransaction[]> {
+  const { data, error } = await supabase
+    .from("employee_bonus_transactions")
+    .select("id, employee_id, amount, type, note, created_at")
+    .eq("employee_id", employeeId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    employeeId: row.employee_id,
+    employeeName: null,
+    amount: Number(row.amount),
+    type: row.type,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function payEmployeeBonus(employeeId: string, amount: number, note?: string | null) {
+  const { error } = await supabase.rpc("pay_employee_bonus", { p_employee_id: employeeId, p_amount: amount, p_note: note ?? null });
+  if (error) throw error;
+}
+
+export type BonusConfig = { minServiceRating: number; amountPerSurvey: number; topVoteAmount: number; active: boolean };
+
+export async function fetchBonusConfig(): Promise<BonusConfig> {
+  const { data, error } = await supabase
+    .from("employee_bonus_config")
+    .select("min_service_rating, amount_per_survey, top_vote_amount, active")
+    .eq("id", 1)
+    .single();
+  if (error) throw error;
+  return {
+    minServiceRating: data.min_service_rating,
+    amountPerSurvey: Number(data.amount_per_survey),
+    topVoteAmount: Number(data.top_vote_amount),
+    active: data.active,
+  };
+}
+
+export async function updateBonusConfig(
+  patch: Partial<{ minServiceRating: number; amountPerSurvey: number; topVoteAmount: number; active: boolean }>
+) {
+  const { error } = await supabase
+    .from("employee_bonus_config")
+    .update({
+      min_service_rating: patch.minServiceRating,
+      amount_per_survey: patch.amountPerSurvey,
+      top_vote_amount: patch.topVoteAmount,
+      active: patch.active,
+    })
+    .eq("id", 1);
+  if (error) throw error;
 }
 
 export type AdminCustomer = {

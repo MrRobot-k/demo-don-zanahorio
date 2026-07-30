@@ -1,5 +1,7 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
+import { supabase } from "@/lib/supabase";
+import { computeShippingCost } from "@/lib/shipping";
 
 export const prerender = false;
 
@@ -15,8 +17,9 @@ export const POST: APIRoute = async ({ request }) => {
   const body = (await request.json()) as {
     orderId: string;
     items: Array<{ name: string; price: number; qty: number }>;
-    shippingCost: number;
-    discount: number;
+    couponCode: string | null;
+    contact: string | null;
+    subscriptionDiscount: number;
   };
 
   if (!body.orderId || !Array.isArray(body.items) || body.items.length === 0) {
@@ -25,6 +28,37 @@ export const POST: APIRoute = async ({ request }) => {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // Recompute shipping and the coupon discount from the order already
+  // persisted server-side, instead of trusting the numbers in this request
+  // body -- otherwise a personal, single-use coupon would be trivially
+  // spoofable by anyone who can read its code.
+  const { data: order, error: orderError } = await supabase.rpc("get_order_for_checkout", { p_order_id: body.orderId });
+  if (orderError || !order) {
+    return new Response(JSON.stringify({ error: "No se encontró el pedido." }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const subtotal = Number(order.subtotal);
+  const shippingCost = computeShippingCost({
+    fulfillment: order.fulfillmentType,
+    subtotal,
+    zone: order.distanceKm != null ? { id: "", name: "", distanceKm: Number(order.distanceKm) } : null,
+  }).cost;
+
+  let couponDiscount = 0;
+  if (body.couponCode) {
+    const { data: validated } = await supabase.rpc("validate_coupon", {
+      p_code: body.couponCode,
+      p_contact: body.contact ?? null,
+    });
+    if (validated?.discountPercent) {
+      couponDiscount = Math.round(subtotal * (validated.discountPercent / 100));
+    }
+  }
+  const discount = couponDiscount + Math.max(0, Number(body.subscriptionDiscount) || 0);
 
   const stripe = new Stripe(secretKey);
   const origin = request.headers.get("origin") ?? new URL(request.url).origin;
@@ -38,21 +72,21 @@ export const POST: APIRoute = async ({ request }) => {
     },
   }));
 
-  if (body.shippingCost > 0) {
+  if (shippingCost > 0) {
     lineItems.push({
       quantity: 1,
       price_data: {
         currency: "mxn",
-        unit_amount: Math.round(body.shippingCost * 100),
+        unit_amount: Math.round(shippingCost * 100),
         product_data: { name: "Envío" },
       },
     });
   }
 
   let discounts: Stripe.Checkout.SessionCreateParams.Discount[] | undefined;
-  if (body.discount > 0) {
+  if (discount > 0) {
     const coupon = await stripe.coupons.create({
-      amount_off: Math.round(body.discount * 100),
+      amount_off: Math.round(discount * 100),
       currency: "mxn",
       duration: "once",
     });

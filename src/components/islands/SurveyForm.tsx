@@ -2,7 +2,7 @@ import { useState } from "react";
 import StarRating from "@/components/islands/StarRating";
 import GoogleReviewLink from "@/components/islands/GoogleReviewLink";
 import { SITE } from "@/data/site";
-import { fetchCashiers, submitSurvey } from "@/lib/queries";
+import { fetchCashiers, submitSurveyWithIncentive } from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +25,7 @@ export default function SurveyForm() {
         <h2 className="mt-4 text-2xl font-bold">¡Gracias por tu opinión!</h2>
         <p className="mt-2 text-sm text-carrot-50/70">
           Tu encuesta ayuda a mejorar el servicio y a reconocer a nuestro equipo. Como agradecimiento, comparte tu
-          experiencia también en Google y recibe un cupón especial.
+          experiencia también en Google.
         </p>
         <GoogleReviewLink className="mt-6" />
       </div>
@@ -41,7 +41,7 @@ export default function SurveyForm() {
         setSubmitting(true);
         setSubmitError("");
         try {
-          await submitSurvey({
+          await submitSurveyWithIncentive({
             branchRating,
             serviceRating,
             cashierId,

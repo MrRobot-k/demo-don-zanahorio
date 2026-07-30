@@ -26,7 +26,16 @@ if (!sessionId || !orderId) {
       errorMessage = "El pago no se completó todavía.";
     }
   } catch (err) {
-    errorMessage = err instanceof Error ? err.message : "No se pudo verificar el pago.";
+    // Supabase RPC errors are plain objects, not Error instances -- without
+    // this fallback their .message (e.g. "forbidden" from mark_order_paid)
+    // was swallowed by a generic string, hiding the real cause.
+    if (err instanceof Error) {
+      errorMessage = err.message;
+    } else if (err && typeof err === "object" && "message" in err) {
+      errorMessage = String((err as { message: unknown }).message);
+    } else {
+      errorMessage = "No se pudo verificar el pago.";
+    }
   }
 }
 ---
@@ -58,3 +67,10 @@ if (!sessionId || !orderId) {
     </div>
   </div>
 </Layout>
+
+{paid && (
+  <script>
+    import { clearCart } from "@/stores/cart";
+    clearCart();
+  </script>
+)}

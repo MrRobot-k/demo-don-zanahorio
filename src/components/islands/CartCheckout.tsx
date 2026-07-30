@@ -3,12 +3,20 @@ import { useStore } from "@nanostores/react";
 import { Minus, Plus, ShoppingBasket, Trash2 } from "lucide-react";
 import { $cartLines, $cartTotal, clearCart, removeFromCart, setQty } from "@/stores/cart";
 import { SITE, whatsappLink } from "@/data/site";
-import { fetchCoupons, submitOrder, awardOrderPoints, lookupLoyaltyCustomer } from "@/lib/queries";
+import {
+  fetchDeliveryZones,
+  submitOrder,
+  awardOrderPoints,
+  lookupLoyaltyCustomer,
+  validateCoupon,
+  redeemCustomerCoupon,
+} from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { $loyaltyContact } from "@/stores/loyalty";
 import { cn, formatMXN } from "@/lib/utils";
 import { useMounted } from "@/hooks/useMounted";
 import { computeSubscriptionDiscount } from "@/lib/subscriptionDiscount";
+import { computeShippingCost } from "@/lib/shipping";
 
 type Fulfillment = "pickup" | "delivery";
 type Payment = "card" | "cash";
@@ -22,15 +30,18 @@ export default function CartCheckout() {
   const mounted = useMounted();
   const displayLines = mounted ? lines : [];
   const savedContact = useStore($loyaltyContact);
-  const { data: coupons } = useSupabaseData(fetchCoupons);
+  const { data: zones } = useSupabaseData(fetchDeliveryZones);
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
   const [payment, setPayment] = useState<Payment>("card");
   const [address, setAddress] = useState("");
+  const [zoneId, setZoneId] = useState<string | null>(null);
   const [loyaltyContact, setLoyaltyContact] = useState(savedContact ?? "");
   const [subscriberPlanId, setSubscriberPlanId] = useState<string | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [appliedCouponKind, setAppliedCouponKind] = useState<"personal" | "global" | null>(null);
+  const [appliedCouponPercent, setAppliedCouponPercent] = useState<number | null>(null);
   const [couponNote, setCouponNote] = useState("");
   const [couponError, setCouponError] = useState("");
   const [confirmedOrder, setConfirmedOrder] = useState<number | null>(null);
@@ -38,18 +49,17 @@ export default function CartCheckout() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  const selectedZone = zones?.find((z) => z.id === zoneId) ?? null;
+
   const shipping = useMemo(() => {
-    if (fulfillment === "pickup" || lines.length === 0) return 0;
-    if (subtotal >= SITE.shipping.freeThreshold) return 0;
-    return SITE.shipping.baseCost;
-  }, [fulfillment, subtotal, lines.length]);
+    if (lines.length === 0) return 0;
+    return computeShippingCost({ fulfillment, subtotal, zone: selectedZone }).cost;
+  }, [fulfillment, subtotal, selectedZone, lines.length]);
 
   const discount = useMemo(() => {
-    if (!appliedCoupon) return 0;
-    const match = coupons?.find((c) => c.code === appliedCoupon);
-    if (!match?.discountPercent) return 0;
-    return Math.round(subtotal * (match.discountPercent / 100));
-  }, [appliedCoupon, coupons, subtotal]);
+    if (!appliedCoupon || !appliedCouponPercent) return 0;
+    return Math.round(subtotal * (appliedCouponPercent / 100));
+  }, [appliedCoupon, appliedCouponPercent, subtotal]);
 
   const subscriptionDiscount = useMemo(
     () => computeSubscriptionDiscount(subscriberPlanId, lines, subtotal),
@@ -79,18 +89,29 @@ export default function CartCheckout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyCoupon() {
+  async function applyCoupon() {
     const code = couponInput.trim().toUpperCase();
-    const match = coupons?.find((c) => c.code === code);
-    if (!match) {
-      setCouponError("Cupón no válido o vencido.");
-      setCouponNote("");
-      setAppliedCoupon(null);
-      return;
-    }
+    if (!code) return;
     setCouponError("");
-    setAppliedCoupon(code);
-    setCouponNote(match.discountPercent ? "" : `Este cupón (${match.discount}) se aplica directamente en tienda.`);
+    try {
+      const result = await validateCoupon(code, loyaltyContact.trim() || null);
+      if (!result) {
+        setCouponError("Cupón no válido, vencido o ya utilizado.");
+        setCouponNote("");
+        setAppliedCoupon(null);
+        setAppliedCouponKind(null);
+        setAppliedCouponPercent(null);
+        return;
+      }
+      setAppliedCoupon(result.code);
+      setAppliedCouponKind(result.kind);
+      setAppliedCouponPercent(result.discountPercent);
+      setCouponNote(
+        result.discountPercent ? "" : `Este cupón (${result.discountLabel ?? result.title}) se aplica directamente en tienda.`
+      );
+    } catch (err) {
+      setCouponError(err instanceof Error ? err.message : "No se pudo validar el cupón.");
+    }
   }
 
   async function confirmOrder() {
@@ -109,7 +130,13 @@ export default function CartCheckout() {
         couponCode: appliedCoupon,
         total,
         items: lines.map((l) => ({ name: l.name, price: l.price, qty: l.qty })),
+        deliveryZoneId: fulfillment === "delivery" ? zoneId : null,
+        distanceKm: fulfillment === "delivery" ? selectedZone?.distanceKm ?? null : null,
       });
+
+      if (appliedCoupon && appliedCouponKind === "personal") {
+        redeemCustomerCoupon(appliedCoupon, orderId).catch(() => {});
+      }
 
       if (loyaltyContact.trim()) {
         awardOrderPoints(orderId, loyaltyContact.trim()).catch(() => {});
@@ -123,8 +150,9 @@ export default function CartCheckout() {
           body: JSON.stringify({
             orderId,
             items: lines.map((l) => ({ name: l.name, price: l.price, qty: l.qty })),
-            shippingCost: shipping,
-            discount: totalDiscount,
+            couponCode: appliedCoupon,
+            contact: loyaltyContact.trim() || null,
+            subscriptionDiscount: subscriptionDiscount?.amount ?? 0,
           }),
         });
         const data = await res.json();
@@ -136,6 +164,7 @@ export default function CartCheckout() {
       }
 
       const orderNumber = Math.floor(1000 + Math.random() * 9000);
+      clearCart();
       setConfirmedOrder(orderNumber);
     } catch (err) {
       setRedirecting(false);
@@ -166,14 +195,12 @@ export default function CartCheckout() {
             href={whatsappLink(message)}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => clearCart()}
             className="rounded-full bg-leaf-500 px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-leaf-400"
           >
             Confirmar por WhatsApp
           </a>
           <a
             href="/menu"
-            onClick={() => clearCart()}
             className="glass glass-card rounded-full px-6 py-3 text-sm font-semibold text-carrot-50"
           >
             Seguir explorando el menú
@@ -260,7 +287,21 @@ export default function CartCheckout() {
             ))}
           </div>
           {fulfillment === "delivery" && (
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
+              <select
+                value={zoneId ?? ""}
+                onChange={(e) => setZoneId(e.target.value || null)}
+                className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+              >
+                <option value="" className="bg-ink-900">
+                  Selecciona tu zona de entrega...
+                </option>
+                {zones?.map((z) => (
+                  <option key={z.id} value={z.id} className="bg-ink-900">
+                    {z.name} (~{z.distanceKm} km)
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={address}
@@ -268,8 +309,9 @@ export default function CartCheckout() {
                 placeholder="Dirección de entrega en Ciudad Victoria"
                 className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400"
               />
-              <p className="mt-1.5 text-xs text-carrot-50/50">
-                Envío gratis en pedidos desde {formatMXN(SITE.shipping.freeThreshold)}.
+              <p className="text-xs text-carrot-50/50">
+                Envío gratis en pedidos desde {formatMXN(SITE.shipping.freeThreshold)}. El costo se calcula
+                automáticamente según tu zona.
               </p>
             </div>
           )}

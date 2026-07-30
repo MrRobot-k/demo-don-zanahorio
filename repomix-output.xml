@@ -40,6 +40,10 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+.agents/
+  skills/
+    find-skills/
+      SKILL.md
 public/
   favicon.ico
   favicon.svg
@@ -82,6 +86,7 @@ src/
     Layout.astro
   lib/
     queries.ts
+    shipping.ts
     subscriptionDiscount.ts
     supabase.ts
     utils.ts
@@ -89,6 +94,8 @@ src/
     api/
       checkout/
         create-session.ts
+      webhooks/
+        stripe.ts
     carrito/
       exito.astro
     admin.astro
@@ -108,6 +115,12 @@ src/
   styles/
     global.css
   env.d.ts
+supabase/
+  migrations/
+    20260729000001_reviews_and_customer_coupons.sql
+    20260729000002_employee_incentives.sql
+    20260729000003_delivery_zones.sql
+    20260729000004_get_order_for_checkout.sql
 .gitignore
 AGENTS.md
 astro.config.mjs
@@ -116,11 +129,632 @@ playwright.config.ts
 pnpm-workspace.yaml
 README.md
 requerimientos-don-zanahorio.md
+skills-lock.json
 tsconfig.json
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path=".agents/skills/find-skills/SKILL.md">
+---
+name: find-skills
+description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.
+---
+
+# Find Skills
+
+This skill helps you discover and install skills from the open agent skills ecosystem.
+
+## When to Use This Skill
+
+Use this skill when the user:
+
+- Asks "how do I do X" where X might be a common task with an existing skill
+- Says "find a skill for X" or "is there a skill for X"
+- Asks "can you do X" where X is a specialized capability
+- Expresses interest in extending agent capabilities
+- Wants to search for tools, templates, or workflows
+- Mentions they wish they had help with a specific domain (design, testing, deployment, etc.)
+
+## What is the Skills CLI?
+
+The Skills CLI (`npx skills`) is the package manager for the open agent skills ecosystem. Skills are modular packages that extend agent capabilities with specialized knowledge, workflows, and tools.
+
+**Key commands:**
+
+- `npx skills find [query] [--owner <owner>]` - Search for skills interactively or by keyword, optionally scoped to a GitHub owner
+- `npx skills add <package>` - Install a skill from GitHub or other sources
+- `npx skills update` - Update all installed skills
+
+**Browse skills at:** https://skills.sh/
+
+## How to Help Users Find Skills
+
+### Step 1: Understand What They Need
+
+When a user asks for help with something, identify:
+
+1. The domain (e.g., React, testing, design, deployment)
+2. The specific task (e.g., writing tests, creating animations, reviewing PRs)
+3. Whether this is a common enough task that a skill likely exists
+
+### Step 2: Check the Leaderboard First
+
+Before running a CLI search, check the [skills.sh leaderboard](https://skills.sh/) to see if a well-known skill already exists for the domain. The leaderboard ranks skills by total installs, surfacing the most popular and battle-tested options.
+
+For example, top skills for web development include:
+- `vercel-labs/agent-skills` — React, Next.js, web design (100K+ installs each)
+- `anthropics/skills` — Frontend design, document processing (100K+ installs)
+
+### Step 3: Search for Skills
+
+If the leaderboard doesn't cover the user's need, run the find command:
+
+```bash
+npx skills find [query] [--owner <owner>]
+```
+
+For example:
+
+- User asks "how do I make my React app faster?" → `npx skills find react performance`
+- User asks "can you help me with PR reviews?" → `npx skills find pr review`
+- User asks "I need to create a changelog" → `npx skills find changelog`
+
+### Step 4: Verify Quality Before Recommending
+
+**Do not recommend a skill based solely on search results.** Always verify:
+
+1. **Install count** — Prefer skills with 1K+ installs. Be cautious with anything under 100.
+2. **Source reputation** — Official sources (`vercel-labs`, `anthropics`, `microsoft`) are more trustworthy than unknown authors.
+3. **GitHub stars** — Check the source repository. A skill from a repo with <100 stars should be treated with skepticism.
+
+### Step 5: Present Options to the User
+
+When you find relevant skills, present them to the user with:
+
+1. The skill name and what it does
+2. The install count and source
+3. The install command they can run
+4. A link to learn more at skills.sh
+
+Example response:
+
+```
+I found a skill that might help! The "react-best-practices" skill provides
+React and Next.js performance optimization guidelines from Vercel Engineering.
+(185K installs)
+
+To install it:
+npx skills add vercel-labs/agent-skills@react-best-practices
+
+Learn more: https://skills.sh/vercel-labs/agent-skills/react-best-practices
+```
+
+### Step 6: Offer to Install
+
+If the user wants to proceed, you can install the skill for them:
+
+```bash
+npx skills add <owner/repo@skill> -g -y
+```
+
+The `-g` flag installs globally (user-level) and `-y` skips confirmation prompts.
+
+## Common Skill Categories
+
+When searching, consider these common categories:
+
+| Category        | Example Queries                          |
+| --------------- | ---------------------------------------- |
+| Web Development | react, nextjs, typescript, css, tailwind |
+| Testing         | testing, jest, playwright, e2e           |
+| DevOps          | deploy, docker, kubernetes, ci-cd        |
+| Documentation   | docs, readme, changelog, api-docs        |
+| Code Quality    | review, lint, refactor, best-practices   |
+| Design          | ui, ux, design-system, accessibility     |
+| Productivity    | workflow, automation, git                |
+
+## Tips for Effective Searches
+
+1. **Use specific keywords**: "react testing" is better than just "testing"
+2. **Try alternative terms**: If "deploy" doesn't work, try "deployment" or "ci-cd"
+3. **Check popular sources**: Many skills come from `vercel-labs/agent-skills` or `ComposioHQ/awesome-claude-skills`
+
+## When No Skills Are Found
+
+If no relevant skills exist:
+
+1. Acknowledge that no existing skill was found
+2. Offer to help with the task directly using your general capabilities
+3. Suggest the user could create their own skill with `npx skills init`
+
+Example:
+
+```
+I searched for skills related to "xyz" but didn't find any matches.
+I can still help you with this task directly! Would you like me to proceed?
+
+If this is something you do often, you could create your own skill:
+npx skills init my-xyz-skill
+```
+</file>
+
+<file path="src/lib/shipping.ts">
+import { SITE } from "@/data/site";
+
+export type DeliveryZone = { id: string; name: string; distanceKm: number };
+
+export type ShippingResult = {
+  cost: number;
+  distanceKm: number | null;
+  freeReason: string | null;
+};
+
+/**
+ * Single source of truth for shipping cost (section 2.1: "configuración
+ * automática de costo de envío"), shared by the online cart and wholesale
+ * quotes so they never diverge again. `perKm` finally gets used here.
+ */
+export function computeShippingCost(params: {
+  fulfillment: "pickup" | "delivery";
+  subtotal: number;
+  zone: DeliveryZone | null;
+  isWholesale?: boolean;
+}): ShippingResult {
+  const { fulfillment, subtotal, zone, isWholesale = false } = params;
+
+  if (fulfillment === "pickup") {
+    return { cost: 0, distanceKm: null, freeReason: null };
+  }
+
+  if (!isWholesale && subtotal >= SITE.shipping.freeThreshold) {
+    return {
+      cost: 0,
+      distanceKm: zone?.distanceKm ?? null,
+      freeReason: `Envío gratis en pedidos desde ${SITE.shipping.freeThreshold}`,
+    };
+  }
+
+  const base = isWholesale ? SITE.shipping.baseCost * 2 : SITE.shipping.baseCost;
+  const distanceKm = zone?.distanceKm ?? null;
+  const cost = Math.round(base + (distanceKm ?? 0) * SITE.shipping.perKm);
+
+  return { cost, distanceKm, freeReason: null };
+}
+</file>
+
+<file path="src/pages/api/webhooks/stripe.ts">
+import type { APIRoute } from 'astro';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2023-10-16', // O la versión que utilices
+});
+
+export const POST: APIRoute = async ({ request }) => {
+  const signature = request.headers.get('stripe-signature');
+
+  if (!signature) {
+    return new Response('Falta la firma de Stripe', { status: 400 });
+  }
+
+  try {
+    // Leemos el body crudo en texto para validar la firma
+    const rawBody = await request.text();
+    const event = stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      import.meta.env.STRIPE_WEBHOOK_SECRET
+    );
+
+    // Manejo de eventos según lo que necesites
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        // AQUÍ: Marcar pedido como pagado o activar beneficios iniciales
+        console.log('Pago recibido exitosamente:', session.id);
+        break;
+      }
+
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        // AQUÍ: Actualizar el estado del usuario/cliente a "Suscripción Activa" en Supabase
+        console.log('Suscripción activa para cliente:', subscription.customer);
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription;
+        // AQUÍ: Revocar acceso a la membresía en tu BD
+        console.log('Suscripción cancelada:', subscription.id);
+        break;
+      }
+
+      default:
+        console.log(`Evento no manejado: ${event.type}`);
+    }
+
+    return new Response(JSON.stringify({ received: true }), { status: 200 });
+  } catch (err: any) {
+    console.error(`Error de Webhook: ${err.message}`);
+    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+  }
+};
+</file>
+
+<file path="supabase/migrations/20260729000001_reviews_and_customer_coupons.sql">
+-- Personal, single-use coupons (e.g. issued as a Google review reward)
+create table public.customer_coupons (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.customers(id),
+  code text not null unique,
+  title text not null,
+  discount_percent numeric not null check (discount_percent > 0 and discount_percent <= 100),
+  source text not null default 'google_review' check (source in ('google_review','manual','promo')),
+  expires_at date,
+  redeemed_at timestamptz,
+  redeemed_order_id uuid references public.orders(id),
+  created_at timestamptz not null default now()
+);
+create index customer_coupons_customer_id_idx on public.customer_coupons (customer_id);
+
+alter table public.customer_coupons enable row level security;
+create policy "admins read all customer coupons" on public.customer_coupons
+  for select using (public.is_admin_employee());
+
+-- Singleton config for the Google-review reward program
+create table public.review_reward_config (
+  id int primary key default 1 check (id = 1),
+  discount_percent numeric not null default 15,
+  valid_days int not null default 30,
+  cooldown_days int not null default 90,
+  active boolean not null default true
+);
+insert into public.review_reward_config (id) values (1);
+
+alter table public.review_reward_config enable row level security;
+create policy "public read review reward config" on public.review_reward_config
+  for select using (true);
+create policy "admins manage review reward config" on public.review_reward_config
+  for all using (public.is_admin_employee()) with check (public.is_admin_employee());
+
+-- Claim the review reward: registers who reviewed (google_reviews.customer_id) and
+-- issues a personal one-time coupon, atomically.
+create or replace function public.claim_google_review_reward(p_contact text)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  cust public.customers;
+  cfg public.review_reward_config;
+  new_code text;
+  new_expires date;
+  last_claim timestamptz;
+begin
+  select * into cust from public.customers
+   where lower(email) = lower(trim(p_contact)) or phone = trim(p_contact)
+   limit 1;
+  if cust.id is null then
+    raise exception 'cuenta_no_encontrada';
+  end if;
+
+  select * into cfg from public.review_reward_config where id = 1;
+  if cfg.id is null or not cfg.active then
+    raise exception 'recompensa_no_disponible';
+  end if;
+
+  select submitted_at into last_claim from public.google_reviews
+   where customer_id = cust.id
+   order by submitted_at desc
+   limit 1;
+  if last_claim is not null and last_claim > now() - (cfg.cooldown_days || ' days')::interval then
+    raise exception 'ya_reclamado_recientemente';
+  end if;
+
+  new_code := 'RESENA' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+  new_expires := (now() + (cfg.valid_days || ' days')::interval)::date;
+
+  insert into public.google_reviews (customer_id, reward_granted) values (cust.id, true);
+
+  insert into public.customer_coupons (customer_id, code, title, discount_percent, source, expires_at)
+  values (cust.id, new_code, 'Gracias por tu reseña en Google', cfg.discount_percent, 'google_review', new_expires);
+
+  return jsonb_build_object(
+    'code', new_code,
+    'discountPercent', cfg.discount_percent,
+    'expiresAt', new_expires
+  );
+end;
+$$;
+
+-- Server-side coupon validation: personal coupon first, then the global coupons table.
+-- Checks ownership, redemption and expiry -- none of which the client-side lookup did.
+create or replace function public.validate_coupon(p_code text, p_contact text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_code text := upper(trim(p_code));
+  cust public.customers;
+  cc public.customer_coupons;
+  gc public.coupons;
+begin
+  if p_contact is not null then
+    select * into cust from public.customers
+     where lower(email) = lower(trim(p_contact)) or phone = trim(p_contact)
+     limit 1;
+  end if;
+
+  if cust.id is not null then
+    select * into cc from public.customer_coupons
+     where code = v_code and customer_id = cust.id and redeemed_at is null
+       and (expires_at is null or expires_at >= current_date)
+     limit 1;
+    if cc.id is not null then
+      return jsonb_build_object('kind', 'personal', 'code', cc.code, 'discountPercent', cc.discount_percent, 'title', cc.title);
+    end if;
+  end if;
+
+  select * into gc from public.coupons
+   where code = v_code and active
+     and (valid_until is null or valid_until >= current_date)
+   limit 1;
+  if gc.id is not null then
+    return jsonb_build_object('kind', 'global', 'code', gc.code, 'discountPercent', gc.discount_percent, 'title', gc.title, 'discountLabel', gc.discount_label);
+  end if;
+
+  return null;
+end;
+$$;
+
+-- Marks a personal coupon as redeemed once its order is created. No-op for global coupons.
+create or replace function public.redeem_customer_coupon(p_code text, p_order_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  update public.customer_coupons
+     set redeemed_at = now(), redeemed_order_id = p_order_id
+   where code = upper(trim(p_code)) and redeemed_at is null;
+end;
+$$;
+
+-- Read a customer's personal coupons (loyalty accounts are contact-identified, not
+-- Supabase-Auth-identified, so this mirrors get_loyalty_snapshot rather than relying on RLS).
+create or replace function public.get_customer_coupons(p_contact text)
+returns setof public.customer_coupons
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  cust public.customers;
+begin
+  select * into cust from public.customers
+   where lower(email) = lower(trim(p_contact)) or phone = trim(p_contact)
+   limit 1;
+  if cust.id is null then
+    return;
+  end if;
+  return query select * from public.customer_coupons where customer_id = cust.id order by created_at desc;
+end;
+$$;
+</file>
+
+<file path="supabase/migrations/20260729000002_employee_incentives.sql">
+-- Bridge between the public voting table (cashiers) and the RLS-gated employees table
+alter table public.cashiers add column employee_id uuid references public.employees(id);
+
+create policy "admins manage cashiers" on public.cashiers
+  for all using (public.is_admin_employee()) with check (public.is_admin_employee());
+
+-- Singleton config for the survey-driven incentive program
+create table public.employee_bonus_config (
+  id int primary key default 1 check (id = 1),
+  min_service_rating smallint not null default 5,
+  amount_per_survey numeric not null default 15,
+  top_vote_amount numeric not null default 200,
+  active boolean not null default true
+);
+insert into public.employee_bonus_config (id) values (1);
+
+alter table public.employee_bonus_config enable row level security;
+create policy "staff read bonus config" on public.employee_bonus_config
+  for select using (public.is_active_employee());
+create policy "admins manage bonus config" on public.employee_bonus_config
+  for all using (public.is_admin_employee()) with check (public.is_admin_employee());
+
+-- Continuous ledger, mirroring wallet_transactions on the customer side
+create table public.employee_bonus_transactions (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id),
+  amount numeric not null,
+  type text not null check (type in ('survey_incentive','payout','adjustment')),
+  reference_survey_id uuid references public.surveys(id),
+  note text,
+  created_at timestamptz not null default now()
+);
+create index employee_bonus_transactions_employee_id_idx on public.employee_bonus_transactions (employee_id, created_at);
+-- A survey can only ever generate one incentive entry
+create unique index employee_bonus_transactions_survey_uidx on public.employee_bonus_transactions (reference_survey_id) where reference_survey_id is not null;
+
+alter table public.employee_bonus_transactions enable row level security;
+create policy "employees read own bonus ledger" on public.employee_bonus_transactions
+  for select using (exists (
+    select 1 from public.employees e
+    where e.id = employee_bonus_transactions.employee_id and e.auth_user_id = auth.uid()
+  ));
+create policy "admins read all bonus ledger" on public.employee_bonus_transactions
+  for select using (public.is_admin_employee());
+
+-- Replaces submitSurvey: inserts the survey and, in the same transaction, credits the
+-- cashier's linked employee when the service rating clears the configured threshold.
+create or replace function public.submit_survey_with_incentive(
+  p_branch_rating smallint,
+  p_service_rating smallint,
+  p_cashier_id uuid,
+  p_comments text,
+  p_contact text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  cust public.customers;
+  cashier public.cashiers;
+  cfg public.employee_bonus_config;
+  new_survey_id uuid;
+begin
+  if p_contact is not null then
+    select * into cust from public.customers
+     where lower(email) = lower(trim(p_contact)) or phone = trim(p_contact)
+     limit 1;
+  end if;
+
+  insert into public.surveys (customer_id, branch_rating, service_rating, cashier_id, comments)
+  values (cust.id, p_branch_rating, p_service_rating, p_cashier_id, p_comments)
+  returning id into new_survey_id;
+
+  if p_cashier_id is not null then
+    select * into cashier from public.cashiers where id = p_cashier_id;
+    select * into cfg from public.employee_bonus_config where id = 1;
+
+    if cashier.employee_id is not null and cfg.active and p_service_rating >= cfg.min_service_rating then
+      insert into public.employee_bonus_transactions (employee_id, amount, type, reference_survey_id, note)
+      values (
+        cashier.employee_id,
+        cfg.amount_per_survey,
+        'survey_incentive',
+        new_survey_id,
+        'Encuesta con calificación de servicio ' || p_service_rating
+      );
+    end if;
+  end if;
+
+  return new_survey_id;
+end;
+$$;
+
+-- Admin-gated payout entry
+create or replace function public.pay_employee_bonus(p_employee_id uuid, p_amount numeric, p_note text default null)
+returns void
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  if not public.is_admin_employee() then
+    raise exception 'forbidden' using errcode = '28000';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'monto_invalido';
+  end if;
+  insert into public.employee_bonus_transactions (employee_id, amount, type, note)
+  values (p_employee_id, -p_amount, 'payout', p_note);
+end;
+$$;
+</file>
+
+<file path="supabase/migrations/20260729000003_delivery_zones.sql">
+create table public.delivery_zones (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  distance_km numeric not null check (distance_km >= 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table public.delivery_zones enable row level security;
+create policy "public read active delivery zones" on public.delivery_zones
+  for select using (active = true);
+create policy "admins manage delivery zones" on public.delivery_zones
+  for all using (public.is_admin_employee()) with check (public.is_admin_employee());
+
+insert into public.delivery_zones (name, distance_km) values
+  ('Centro', 2),
+  ('Las Palmas', 3),
+  ('Miguel Hidalgo', 4),
+  ('Del Maestro', 5),
+  ('Praderas', 6),
+  ('Libramiento Naciones Unidas', 8),
+  ('Guadalupe', 9),
+  ('Los Altos', 10);
+
+alter table public.orders add column delivery_zone_id uuid references public.delivery_zones(id);
+alter table public.orders add column distance_km numeric;
+
+alter table public.wholesale_orders add column delivery_zone_id uuid references public.delivery_zones(id);
+alter table public.wholesale_orders add column shipping_cost numeric not null default 0;
+</file>
+
+<file path="supabase/migrations/20260729000004_get_order_for_checkout.sql">
+-- orders/order_items have no public SELECT policy (only staff/admin), so the
+-- checkout API route -- running with the anon key, same as the rest of the
+-- client code -- needs a narrow RPC to re-read pricing-relevant fields when
+-- recomputing shipping and coupon discount server-side.
+create or replace function public.get_order_for_checkout(p_order_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  ord public.orders;
+  zone public.delivery_zones;
+begin
+  select * into ord from public.orders where id = p_order_id;
+  if ord.id is null then
+    return null;
+  end if;
+
+  if ord.delivery_zone_id is not null then
+    select * into zone from public.delivery_zones where id = ord.delivery_zone_id;
+  end if;
+
+  return jsonb_build_object(
+    'subtotal', ord.subtotal,
+    'fulfillmentType', ord.fulfillment_type,
+    'distanceKm', zone.distance_km
+  );
+end;
+$$;
+</file>
+
+<file path="skills-lock.json">
+{
+  "version": 1,
+  "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "b146008599c31057cef1c145774cea5d5afb30e8f43fa802e47a4b461419aaaf"
+    }
+  }
+}
+</file>
+
+<file path="public/favicon.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 128 128">
+    <path d="M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z" />
+    <style>
+        path { fill: #000; }
+        @media (prefers-color-scheme: dark) {
+            path { fill: #FFF; }
+        }
+    </style>
+</svg>
+</file>
 
 <file path="src/components/islands/AdminDashboard.tsx">
 import { useEffect, useState } from "react";
@@ -138,11 +772,14 @@ import {
   X,
   Plus,
   UtensilsCrossed,
+  Gift,
+  MapPin,
 } from "lucide-react";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import StaffLogin from "@/components/islands/StaffLogin";
 import { formatMXN, cn } from "@/lib/utils";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { SITE } from "@/data/site";
 import {
   fetchAdminOrders,
   updateOrderStatus,
@@ -156,7 +793,19 @@ import {
   markReferralHired,
   claimReferralBonus,
   type AdminReferral,
-  fetchAdminGoogleReviewsCount,
+  fetchAdminGoogleReviews,
+  fetchReviewRewardConfig,
+  updateReviewRewardConfig,
+  fetchAdminCashiers,
+  linkCashierToEmployee,
+  fetchAdminEmployees,
+  fetchAdminBonusLedger,
+  payEmployeeBonus,
+  fetchBonusConfig,
+  updateBonusConfig,
+  fetchAdminDeliveryZones,
+  createDeliveryZone,
+  updateDeliveryZone,
   fetchAdminCustomers,
   fetchAdminCoupons,
   createCoupon,
@@ -170,10 +819,12 @@ type Section =
   | "resumen"
   | "pedidos"
   | "mayoreo"
+  | "zonas"
   | "encuestas"
   | "clientes"
   | "empleo"
   | "referidos"
+  | "incentivos"
   | "cupones"
   | "productos"
   | "resenas";
@@ -185,6 +836,7 @@ const NAV_GROUPS: { label: string; items: { id: Section; label: string; icon: ty
     items: [
       { id: "pedidos", label: "Pedidos", icon: ShoppingCart },
       { id: "mayoreo", label: "Mayoreo", icon: Package },
+      { id: "zonas", label: "Zonas de entrega", icon: MapPin },
     ],
   },
   {
@@ -200,6 +852,7 @@ const NAV_GROUPS: { label: string; items: { id: Section; label: string; icon: ty
     items: [
       { id: "empleo", label: "Solicitudes de empleo", icon: UserPlus },
       { id: "referidos", label: "Referidos", icon: UserPlus },
+      { id: "incentivos", label: "Incentivos", icon: Gift },
     ],
   },
   {
@@ -215,10 +868,12 @@ const SECTION_LABELS: Record<Section, string> = {
   resumen: "Resumen",
   pedidos: "Pedidos",
   mayoreo: "Pedidos de mayoreo",
+  zonas: "Zonas de entrega",
   encuestas: "Encuestas",
   clientes: "Clientes de fidelización",
   empleo: "Solicitudes de empleo",
   referidos: "Referidos de empleados",
+  incentivos: "Incentivos de personal",
   cupones: "Cupones",
   productos: "Menú y precios",
   resenas: "Reseñas de Google",
@@ -561,13 +1216,390 @@ function ReferralsSection() {
   );
 }
 
+function IncentivesSection() {
+  const { data: cashiers, error: cashiersError, loading: cashiersLoading } = useSupabaseData(fetchAdminCashiers);
+  const { data: employees } = useSupabaseData(fetchAdminEmployees);
+  const { data: ledger, error: ledgerError, loading: ledgerLoading } = useSupabaseData(fetchAdminBonusLedger);
+  const { data: config } = useSupabaseData(fetchBonusConfig);
+  const [cashierRows, setCashierRows] = useState(cashiers);
+  const [cfg, setCfg] = useState(config);
+  const [ledgerRows, setLedgerRows] = useState(ledger);
+  const [payForm, setPayForm] = useState({ employeeId: "", amount: "", note: "" });
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  useEffect(() => setCashierRows(cashiers), [cashiers]);
+  useEffect(() => setCfg(config), [config]);
+  useEffect(() => setLedgerRows(ledger), [ledger]);
+
+  async function link(cashierId: string, employeeId: string) {
+    setCashierRows(
+      (prev) =>
+        prev?.map((c) =>
+          c.id === cashierId
+            ? { ...c, employeeId: employeeId || null, employeeName: employees?.find((e) => e.id === employeeId)?.name ?? null }
+            : c
+        ) ?? null
+    );
+    await linkCashierToEmployee(cashierId, employeeId || null).catch(() => {});
+  }
+
+  async function saveConfig() {
+    if (!cfg) return;
+    await updateBonusConfig(cfg).catch(() => {});
+  }
+
+  async function refreshLedger() {
+    const fresh = await fetchAdminBonusLedger().catch(() => null);
+    if (fresh) setLedgerRows(fresh);
+  }
+
+  async function submitPayout(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!payForm.employeeId || !payForm.amount) return;
+    setPaying(true);
+    setPayError("");
+    try {
+      await payEmployeeBonus(payForm.employeeId, Number(payForm.amount), payForm.note.trim() || null);
+      setPayForm({ employeeId: "", amount: "", note: "" });
+      await refreshLedger();
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : "No se pudo registrar el pago.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  const balances = new Map<string, number>();
+  for (const t of ledgerRows ?? []) {
+    balances.set(t.employeeId, (balances.get(t.employeeId) ?? 0) + t.amount);
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Vincular cajero con empleado</h3>
+        {cashiersLoading ? (
+          <p className="text-sm text-carrot-50/50">Cargando cajeros...</p>
+        ) : cashiersError ? (
+          <p className="text-sm text-red-400">{cashiersError}</p>
+        ) : (
+          <Table head={["Cajero(a)", "Empleado vinculado", ""]}>
+            {cashierRows?.map((c) => (
+              <tr key={c.id} className="hover:bg-carrot-50/5">
+                <td className="px-4 py-3 text-carrot-50">{c.name}</td>
+                <td className="px-4 py-3 text-xs text-carrot-50/60">{c.employeeName ?? "Sin vincular"}</td>
+                <td className="px-4 py-3">
+                  <select
+                    value={c.employeeId ?? ""}
+                    onChange={(e) => link(c.id, e.target.value)}
+                    className="rounded-full border border-carrot-50/15 bg-ink-900 px-2 py-1 text-xs text-carrot-50 focus:outline-none focus:ring-1 focus:ring-carrot-400"
+                  >
+                    <option value="" className="bg-ink-900">
+                      Sin vincular
+                    </option>
+                    {employees?.map((e) => (
+                      <option key={e.id} value={e.id} className="bg-ink-900">
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </div>
+
+      {cfg && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Reglas del incentivo</h3>
+          <div className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-4">
+            <label className="text-xs text-carrot-50/60">
+              Calificación mínima
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={cfg.minServiceRating}
+                onChange={(e) => setCfg({ ...cfg, minServiceRating: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+              />
+            </label>
+            <label className="text-xs text-carrot-50/60">
+              Monto por encuesta
+              <input
+                type="number"
+                value={cfg.amountPerSurvey}
+                onChange={(e) => setCfg({ ...cfg, amountPerSurvey: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+              />
+            </label>
+            <label className="text-xs text-carrot-50/60">
+              Bono cajero del mes
+              <input
+                type="number"
+                value={cfg.topVoteAmount}
+                onChange={(e) => setCfg({ ...cfg, topVoteAmount: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={saveConfig}
+              className="mt-auto rounded-full bg-carrot-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-carrot-400"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Registrar pago</h3>
+        <form onSubmit={submitPayout} className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-4">
+          <select
+            required
+            value={payForm.employeeId}
+            onChange={(e) => setPayForm({ ...payForm, employeeId: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-ink-900 px-3 py-2 text-sm text-carrot-50"
+          >
+            <option value="" className="bg-ink-900">
+              Empleado...
+            </option>
+            {employees?.map((e) => (
+              <option key={e.id} value={e.id} className="bg-ink-900">
+                {e.name} · saldo {formatMXN(balances.get(e.id) ?? 0)}
+              </option>
+            ))}
+          </select>
+          <input
+            required
+            type="number"
+            placeholder="Monto"
+            value={payForm.amount}
+            onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40"
+          />
+          <input
+            placeholder="Nota (opcional)"
+            value={payForm.note}
+            onChange={(e) => setPayForm({ ...payForm, note: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40"
+          />
+          <button
+            type="submit"
+            disabled={paying}
+            className="rounded-full bg-leaf-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-leaf-400 disabled:opacity-40"
+          >
+            {paying ? "Registrando..." : "Registrar pago"}
+          </button>
+        </form>
+        {payError && <p className="mt-2 text-xs text-red-400">{payError}</p>}
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Libro mayor de incentivos</h3>
+        {ledgerLoading ? (
+          <p className="text-sm text-carrot-50/50">Cargando movimientos...</p>
+        ) : ledgerError ? (
+          <p className="text-sm text-red-400">{ledgerError}</p>
+        ) : (
+          <Table head={["Empleado", "Tipo", "Monto", "Nota", "Fecha"]}>
+            {ledgerRows?.map((t) => (
+              <tr key={t.id} className="hover:bg-carrot-50/5">
+                <td className="px-4 py-3 text-carrot-50">{t.employeeName ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <Badge tone={t.type === "payout" ? "warn" : "good"}>
+                    {t.type === "survey_incentive" ? "Encuesta" : t.type === "payout" ? "Pago" : "Ajuste"}
+                  </Badge>
+                </td>
+                <td className={cn("px-4 py-3 font-semibold", t.amount < 0 ? "text-red-300" : "text-leaf-300")}>{formatMXN(t.amount)}</td>
+                <td className="px-4 py-3 text-xs text-carrot-50/60">{t.note ?? "—"}</td>
+                <td className="px-4 py-3 text-xs text-carrot-50/50">{new Date(t.createdAt).toLocaleDateString("es-MX")}</td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeliveryZonesSection() {
+  const { data, error, loading } = useSupabaseData(fetchAdminDeliveryZones);
+  const [rows, setRows] = useState(data);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", distanceKm: "" });
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState("");
+  useEffect(() => setRows(data), [data]);
+
+  async function toggle(id: string, active: boolean) {
+    setRows((prev) => prev?.map((z) => (z.id === id ? { ...z, active } : z)) ?? null);
+    await updateDeliveryZone(id, { active }).catch(() => {});
+  }
+
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreating(true);
+    setFormError("");
+    try {
+      await createDeliveryZone({ name: form.name.trim(), distanceKm: Number(form.distanceKm) });
+      setForm({ name: "", distanceKm: "" });
+      setShowForm(false);
+      const fresh = await fetchAdminDeliveryZones();
+      setRows(fresh);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "No se pudo crear la zona.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  if (loading) return <p className="text-sm text-carrot-50/50">Cargando zonas...</p>;
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-1.5 rounded-full bg-carrot-500 px-3.5 py-1.5 text-xs font-semibold text-ink-950 hover:bg-carrot-400"
+        >
+          <Plus size={14} /> Nueva zona
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-3">
+          <input
+            required
+            placeholder="Nombre (colonia o zona)"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40 sm:col-span-2"
+          />
+          <input
+            required
+            type="number"
+            placeholder="Distancia (km)"
+            value={form.distanceKm}
+            onChange={(e) => setForm({ ...form, distanceKm: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40"
+          />
+          {formError && <p className="text-xs text-red-400 sm:col-span-3">{formError}</p>}
+          <button
+            type="submit"
+            disabled={creating}
+            className="rounded-full bg-carrot-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-carrot-400 disabled:opacity-40 sm:col-span-3"
+          >
+            {creating ? "Creando..." : "Crear zona"}
+          </button>
+        </form>
+      )}
+
+      <Table head={["Zona", "Distancia", "Costo estimado", "Activa"]}>
+        {rows?.map((z) => (
+          <tr key={z.id} className="hover:bg-carrot-50/5">
+            <td className="px-4 py-3 text-carrot-50">{z.name}</td>
+            <td className="px-4 py-3 text-xs text-carrot-50/60">{z.distanceKm} km</td>
+            <td className="px-4 py-3 text-xs text-carrot-50/60">
+              {formatMXN(SITE.shipping.baseCost + z.distanceKm * SITE.shipping.perKm)}
+            </td>
+            <td className="px-4 py-3">
+              <button
+                type="button"
+                onClick={() => toggle(z.id, !z.active)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[11px] font-semibold",
+                  z.active ? "bg-leaf-500/15 text-leaf-300" : "bg-carrot-50/10 text-carrot-50/50"
+                )}
+              >
+                {z.active ? "Activa" : "Inactiva"}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </div>
+  );
+}
+
 function ReviewsSection() {
-  const { data, error, loading } = useSupabaseData(fetchAdminGoogleReviewsCount);
+  const { data, error, loading } = useSupabaseData(fetchAdminGoogleReviews);
+  const { data: config } = useSupabaseData(fetchReviewRewardConfig);
+  const [cfg, setCfg] = useState(config);
+  useEffect(() => setCfg(config), [config]);
+
+  async function saveConfig() {
+    if (!cfg) return;
+    await updateReviewRewardConfig(cfg).catch(() => {});
+  }
+
   if (loading) return <p className="text-sm text-carrot-50/50">Cargando...</p>;
   if (error) return <p className="text-sm text-red-400">{error}</p>;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <StatCard label="Clics a reseña de Google" value={data ?? 0} hint="Registrados desde la página de encuestas" />
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Reseñas registradas" value={data?.length ?? 0} />
+        <StatCard label="Con cupón otorgado" value={(data ?? []).filter((r) => r.rewardGranted).length} />
+        <StatCard label="Descuento actual" value={cfg ? `${cfg.discountPercent}%` : "—"} />
+      </div>
+
+      {cfg && (
+        <div className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-4">
+          <label className="text-xs text-carrot-50/60">
+            % de descuento
+            <input
+              type="number"
+              value={cfg.discountPercent}
+              onChange={(e) => setCfg({ ...cfg, discountPercent: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+            />
+          </label>
+          <label className="text-xs text-carrot-50/60">
+            Días de vigencia
+            <input
+              type="number"
+              value={cfg.validDays}
+              onChange={(e) => setCfg({ ...cfg, validDays: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+            />
+          </label>
+          <label className="text-xs text-carrot-50/60">
+            Días de espera entre reseñas
+            <input
+              type="number"
+              value={cfg.cooldownDays}
+              onChange={(e) => setCfg({ ...cfg, cooldownDays: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={saveConfig}
+            className="mt-auto rounded-full bg-carrot-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-carrot-400"
+          >
+            Guardar
+          </button>
+        </div>
+      )}
+
+      <Table head={["Cliente", "Contacto", "Cupón otorgado", "Fecha"]}>
+        {data?.map((r) => (
+          <tr key={r.id} className="hover:bg-carrot-50/5">
+            <td className="px-4 py-3 text-carrot-50">{r.customerName ?? "—"}</td>
+            <td className="px-4 py-3 text-xs text-carrot-50/60">{r.customerContact ?? "—"}</td>
+            <td className="px-4 py-3">
+              <Badge tone={r.rewardGranted ? "good" : "neutral"}>{r.rewardGranted ? "Sí" : "No"}</Badge>
+            </td>
+            <td className="px-4 py-3 text-xs text-carrot-50/50">{new Date(r.submittedAt).toLocaleDateString("es-MX")}</td>
+          </tr>
+        ))}
+      </Table>
     </div>
   );
 }
@@ -933,15 +1965,533 @@ export default function AdminDashboard() {
           {section === "resumen" && <OverviewSection goTo={setSection} />}
           {section === "pedidos" && <OrdersSection />}
           {section === "mayoreo" && <WholesaleSection />}
+          {section === "zonas" && <DeliveryZonesSection />}
           {section === "encuestas" && <SurveysSection />}
           {section === "clientes" && <CustomersSection />}
           {section === "empleo" && <JobApplicationsSection />}
           {section === "referidos" && <ReferralsSection />}
+          {section === "incentivos" && <IncentivesSection />}
           {section === "cupones" && <CouponsSection />}
           {section === "productos" && <ProductsSection />}
           {section === "resenas" && <ReviewsSection />}
         </main>
       </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/islands/CategoriesGrid.tsx">
+import { fetchCategories } from "@/lib/queries";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
+
+export default function CategoriesGrid() {
+  const { data: categories, error, loading } = useSupabaseData(fetchCategories);
+
+  if (loading) return <p className="mt-8 text-sm text-carrot-50/60">Cargando categorías...</p>;
+  if (error) return <p className="mt-8 text-sm text-red-400">{error}</p>;
+
+  return (
+    <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {categories?.map((c) => (
+        <a
+          key={c.slug}
+          href={`/menu?categoria=${c.slug}`}
+          className="glass glass-card flex flex-col items-center rounded-2xl p-6 text-center"
+        >
+          <span className="text-4xl">{c.emoji}</span>
+          <h3 className="mt-3 font-semibold">{c.name}</h3>
+        </a>
+      ))}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/islands/GoogleReviewLink.tsx">
+import { useState } from "react";
+import { SITE } from "@/data/site";
+import { claimGoogleReviewReward, fetchReviewRewardConfig } from "@/lib/queries";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { cn } from "@/lib/utils";
+
+export default function GoogleReviewLink({ className }: { className?: string }) {
+  const { data: config } = useSupabaseData(fetchReviewRewardConfig);
+  const [contact, setContact] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [error, setError] = useState("");
+  const [reward, setReward] = useState<{ code: string; discountPercent: number } | null>(null);
+
+  async function claim() {
+    if (contact.trim().length < 5) {
+      setError("Ingresa tu correo o teléfono registrado en Fidelización.");
+      return;
+    }
+    setClaiming(true);
+    setError("");
+    try {
+      const result = await claimGoogleReviewReward(contact.trim());
+      setReward({ code: result.code, discountPercent: result.discountPercent });
+      window.open(SITE.googleReviewUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo generar tu cupón. Intenta de nuevo.");
+    } finally {
+      setClaiming(false);
+    }
+  }
+
+  if (reward) {
+    return (
+      <div className={cn("glass rounded-2xl p-4 text-center", className)}>
+        <p className="text-sm text-carrot-50/80">Gracias. Aquí está tu cupón de {reward.discountPercent}% de descuento:</p>
+        <p className="mt-2 font-mono text-lg font-bold text-carrot-300">{reward.code}</p>
+        <p className="mt-1 text-xs text-carrot-50/50">Aplícalo en tu próximo pedido desde el carrito.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("mx-auto max-w-sm space-y-2", className)}>
+      <input
+        type="text"
+        value={contact}
+        onChange={(e) => setContact(e.target.value)}
+        placeholder="Tu correo o teléfono de Fidelización"
+        className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400"
+      />
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      <button
+        type="button"
+        onClick={claim}
+        disabled={claiming}
+        className="inline-block w-full rounded-full bg-carrot-500 px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-carrot-400 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {claiming ? "Generando cupón..." : `Escribir reseña en Google${config ? ` y ganar ${config.discountPercent}%` : ""}`}
+      </button>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/islands/MayoreoForm.tsx">
+import { useMemo, useState } from "react";
+import { discountFor, WHOLESALE_ITEMS } from "@/data/wholesale";
+import { whatsappLink } from "@/data/site";
+import { fetchDeliveryZones, submitWholesaleOrder } from "@/lib/queries";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { cn, formatMXN } from "@/lib/utils";
+import { computeShippingCost } from "@/lib/shipping";
+
+type Fulfillment = "pickup" | "delivery";
+
+export default function MayoreoForm() {
+  const { data: zones } = useSupabaseData(fetchDeliveryZones);
+  const [itemId, setItemId] = useState(WHOLESALE_ITEMS[0].id);
+  const [units, setUnits] = useState(WHOLESALE_ITEMS[0].minUnits);
+  const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
+  const [zoneId, setZoneId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const item = WHOLESALE_ITEMS.find((i) => i.id === itemId)!;
+  const selectedZone = zones?.find((z) => z.id === zoneId) ?? null;
+
+  const quote = useMemo(() => {
+    const discount = discountFor(units);
+    const subtotal = units * item.pricePerUnit;
+    const discountAmount = Math.round(subtotal * discount);
+    const shipping = computeShippingCost({ fulfillment, subtotal, zone: selectedZone, isWholesale: true }).cost;
+    const total = subtotal - discountAmount + shipping;
+    return { discount, subtotal, discountAmount, shipping, total };
+  }, [units, item, fulfillment, selectedZone]);
+
+  const canSubmit = name.trim().length > 1 && phone.trim().length >= 10 && units >= item.minUnits;
+
+  if (submitted) {
+    const message = `¡Hola! Soy ${name}${company ? ` de ${company}` : ""}. Quiero cotizar ${units} ${item.unit}(s) de "${item.name}" para ${
+      fulfillment === "pickup" ? "recoger en tienda" : "entrega a domicilio"
+    }${eventDate ? `, fecha: ${eventDate}` : ""}. Cotización estimada: ${formatMXN(quote.total)}.`;
+
+    return (
+      <div className="glass-strong mx-auto max-w-lg rounded-3xl p-8 text-center">
+        <span className="text-5xl">📦</span>
+        <h2 className="mt-4 text-2xl font-bold">¡Solicitud recibida!</h2>
+        <p className="mt-2 text-sm text-carrot-50/70">
+          Nuestro equipo confirmará disponibilidad y te enviará la cotización final.
+        </p>
+        <a
+          href={whatsappLink(message)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 inline-block rounded-full bg-leaf-500 px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-leaf-400"
+        >
+          Enviar detalles por WhatsApp
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <form
+        className="glass space-y-5 rounded-2xl p-6"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!canSubmit) return;
+          setSubmitting(true);
+          setSubmitError("");
+          try {
+            await submitWholesaleOrder({
+              customerName: name.trim(),
+              company: company.trim() || null,
+              phone: phone.trim(),
+              itemName: item.name,
+              units,
+              unitPrice: item.pricePerUnit,
+              fulfillmentType: fulfillment,
+              eventDate: eventDate || null,
+              notes: notes.trim() || null,
+              quoteTotal: quote.total,
+              deliveryZoneId: fulfillment === "delivery" ? zoneId : null,
+              shippingCost: quote.shipping,
+            });
+            setSubmitted(true);
+          } catch (err) {
+            setSubmitError(err instanceof Error ? err.message : "No se pudo enviar tu solicitud. Intenta de nuevo.");
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+      >
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">Producto</label>
+          <select
+            value={itemId}
+            onChange={(e) => {
+              const next = WHOLESALE_ITEMS.find((i) => i.id === e.target.value)!;
+              setItemId(next.id);
+              setUnits(next.minUnits);
+            }}
+            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+          >
+            {WHOLESALE_ITEMS.map((i) => (
+              <option className="bg-ink-900" key={i.id} value={i.id}>
+                {i.name} — {formatMXN(i.pricePerUnit)}/{i.unit}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">
+            Cantidad ({item.unit}s, mínimo {item.minUnits})
+          </label>
+          <input
+            type="number"
+            min={item.minUnits}
+            value={units}
+            onChange={(e) => setUnits(Math.max(item.minUnits, Number(e.target.value) || item.minUnits))}
+            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {(["pickup", "delivery"] as Fulfillment[]).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setFulfillment(opt)}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-sm font-medium transition",
+                fulfillment === opt ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
+              )}
+            >
+              {opt === "pickup" ? "🏬 Recoger en tienda" : "🚚 Entrega a domicilio"}
+            </button>
+          ))}
+        </div>
+
+        {fulfillment === "delivery" && (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Zona de entrega</label>
+            <select
+              value={zoneId ?? ""}
+              onChange={(e) => setZoneId(e.target.value || null)}
+              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+            >
+              <option value="" className="bg-ink-900">
+                Selecciona la zona de entrega...
+              </option>
+              {zones?.map((z) => (
+                <option key={z.id} value={z.id} className="bg-ink-900">
+                  {z.name} (~{z.distanceKm} km)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Nombre completo</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Empresa (opcional)</label>
+            <input
+              type="text"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Teléfono</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold">Fecha del evento</label>
+            <input
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">Notas adicionales</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+          />
+        </div>
+
+        {submitError && <p className="text-sm text-red-400">{submitError}</p>}
+
+        <button
+          type="submit"
+          disabled={!canSubmit || submitting}
+          className="w-full rounded-full bg-carrot-500 py-3 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {submitting ? "Enviando..." : "Solicitar cotización"}
+        </button>
+      </form>
+
+      <div className="glass-strong h-fit rounded-2xl p-6">
+        <h2 className="mb-4 text-lg font-semibold">Cotización estimada</h2>
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between text-carrot-50/70">
+            <dt>
+              {units} × {formatMXN(item.pricePerUnit)}
+            </dt>
+            <dd>{formatMXN(quote.subtotal)}</dd>
+          </div>
+          {quote.discount > 0 && (
+            <div className="flex justify-between text-leaf-300">
+              <dt>Descuento por volumen ({Math.round(quote.discount * 100)}%)</dt>
+              <dd>-{formatMXN(quote.discountAmount)}</dd>
+            </div>
+          )}
+          <div className="flex justify-between text-carrot-50/70">
+            <dt>Envío</dt>
+            <dd>{quote.shipping === 0 ? "Incluido" : formatMXN(quote.shipping)}</dd>
+          </div>
+          <div className="flex justify-between border-t border-carrot-50/15 pt-3 text-base font-bold">
+            <dt>Total estimado</dt>
+            <dd>{formatMXN(quote.total)}</dd>
+          </div>
+        </dl>
+        <p className="mt-4 text-xs text-carrot-50/50">
+          Cotización sujeta a confirmación final. Descuentos por volumen: 5% desde 20 unidades, 10% desde 50, 15% desde 100.
+        </p>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/islands/MenuCatalog.tsx">
+import { useMemo, useState } from "react";
+import { useStore } from "@nanostores/react";
+import { Minus, Plus, Search } from "lucide-react";
+import { getVariants, variantDisplayName, type Product } from "@/data/products";
+import { $cartRaw, addToCart, setQty } from "@/stores/cart";
+import { formatMXN, cn } from "@/lib/utils";
+import { fetchCategories, fetchProducts } from "@/lib/queries";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
+
+function useQty(id: string) {
+  const raw = useStore($cartRaw);
+  const entry = raw[id];
+  if (!entry) return 0;
+  try {
+    return (JSON.parse(entry) as { qty: number }).qty ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+function VariantRow({ product, variant, emoji }: { product: Product; variant: ReturnType<typeof getVariants>[number]; emoji: string }) {
+  const qty = useQty(variant.id);
+
+  return (
+    <div className="flex items-center justify-between rounded-xl bg-carrot-50/5 px-3 py-2">
+      <span className="text-xs text-carrot-50/70">
+        {variant.sizeLabel ?? "Precio"} · <span className="font-semibold text-carrot-200">{formatMXN(variant.price)}</span>
+      </span>
+      {qty === 0 ? (
+        <button
+          type="button"
+          onClick={() => addToCart({ id: variant.id, name: variantDisplayName(product, variant), price: variant.price, emoji }, 1)}
+          className="rounded-full bg-carrot-500 px-3 py-1 text-xs font-semibold text-ink-950 transition hover:bg-carrot-400"
+        >
+          Agregar
+        </button>
+      ) : (
+        <div className="glass flex items-center gap-2 rounded-full px-2 py-0.5">
+          <button
+            type="button"
+            aria-label="Quitar uno"
+            onClick={() => setQty(variant.id, qty - 1)}
+            className="grid h-6 w-6 place-items-center rounded-full bg-carrot-50/10 hover:bg-carrot-50/20"
+          >
+            <Minus size={12} />
+          </button>
+          <span className="w-4 text-center text-xs font-semibold">{qty}</span>
+          <button
+            type="button"
+            aria-label="Agregar uno"
+            onClick={() => addToCart({ id: variant.id, name: variantDisplayName(product, variant), price: variant.price, emoji }, 1)}
+            className="grid h-6 w-6 place-items-center rounded-full bg-carrot-500 text-ink-950 hover:bg-carrot-400"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProductCard({ product, emoji }: { product: Product; emoji: string }) {
+  const variants = getVariants(product);
+
+  return (
+    <div className="glass glass-card flex flex-col rounded-2xl p-5">
+      <span className="text-3xl">{emoji}</span>
+      <h3 className="mt-3 font-semibold text-carrot-50">{product.name}</h3>
+      <p className="mt-1 flex-1 text-xs text-carrot-50/65">{product.description}</p>
+      <div className="mt-4 space-y-2">
+        {variants.map((variant) => (
+          <VariantRow key={variant.id} product={product} variant={variant} emoji={emoji} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function initialCategory() {
+  if (typeof window === "undefined") return "Todos";
+  return new URLSearchParams(window.location.search).get("categoria") || "Todos";
+}
+
+export default function MenuCatalog() {
+  const [category, setCategory] = useState<string>(initialCategory);
+  const [query, setQuery] = useState("");
+  const { data: categories, error: categoriesError, loading: categoriesLoading } = useSupabaseData(fetchCategories);
+  const { data: products, error: productsError, loading: productsLoading } = useSupabaseData(fetchProducts);
+
+  const emojiBySlug = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories?.forEach((c) => (map[c.slug] = c.emoji));
+    return map;
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    return (products ?? []).filter((p) => {
+      const matchesCategory = category === "Todos" || p.categorySlug === category;
+      const matchesQuery = p.name.toLowerCase().includes(query.trim().toLowerCase());
+      return matchesCategory && matchesQuery;
+    });
+  }, [products, category, query]);
+
+  const loading = categoriesLoading || productsLoading;
+  const error = categoriesError || productsError;
+
+  return (
+    <div>
+      <div className="glass sticky top-20 z-20 flex flex-col gap-4 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setCategory("Todos")}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-medium transition",
+              category === "Todos" ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
+            )}
+          >
+            Todos
+          </button>
+          {categories?.map((c) => (
+            <button
+              key={c.slug}
+              type="button"
+              onClick={() => setCategory(c.slug)}
+              className={cn(
+                "rounded-full px-3 py-1.5 text-xs font-medium transition",
+                category === c.slug ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
+              )}
+            >
+              {c.emoji} {c.name}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-carrot-50/50" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar platillo..."
+            className="w-full rounded-full bg-carrot-50/10 py-2 pl-9 pr-4 text-sm text-carrot-50 placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400 sm:w-56"
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="mt-10 text-center text-sm text-carrot-50/60">Cargando menú...</p>
+      ) : error ? (
+        <p className="mt-10 text-center text-sm text-red-400">{error}</p>
+      ) : filtered.length === 0 ? (
+        <p className="mt-10 text-center text-sm text-carrot-50/60">No encontramos platillos con ese criterio.</p>
+      ) : (
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((product) => (
+            <ProductCard key={product.id} product={product} emoji={emojiBySlug[product.categorySlug] ?? "🍽️"} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1018,6 +2568,353 @@ export default function StaffLogin({
 }
 </file>
 
+<file path="src/components/islands/StarRating.tsx">
+import { Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export default function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          aria-label={`${n} estrellas`}
+          onClick={() => onChange(n)}
+          className="p-0.5"
+        >
+          <Star
+            size={26}
+            className={cn(n <= value ? "fill-carrot-400 text-carrot-400" : "text-carrot-50/25")}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/islands/SurveyForm.tsx">
+import { useState } from "react";
+import StarRating from "@/components/islands/StarRating";
+import GoogleReviewLink from "@/components/islands/GoogleReviewLink";
+import { SITE } from "@/data/site";
+import { fetchCashiers, submitSurveyWithIncentive } from "@/lib/queries";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { cn } from "@/lib/utils";
+
+export default function SurveyForm() {
+  const { data: cashiers, error: cashiersError, loading: cashiersLoading } = useSupabaseData(fetchCashiers);
+  const [branchRating, setBranchRating] = useState(0);
+  const [serviceRating, setServiceRating] = useState(0);
+  const [cashierId, setCashierId] = useState<string | null>(null);
+  const [comments, setComments] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const canSubmit = branchRating > 0 && serviceRating > 0;
+
+  if (submitted) {
+    return (
+      <div className="glass-strong mx-auto max-w-lg rounded-3xl p-8 text-center">
+        <span className="text-5xl">🙌</span>
+        <h2 className="mt-4 text-2xl font-bold">¡Gracias por tu opinión!</h2>
+        <p className="mt-2 text-sm text-carrot-50/70">
+          Tu encuesta ayuda a mejorar el servicio y a reconocer a nuestro equipo. Como agradecimiento, comparte tu
+          experiencia también en Google.
+        </p>
+        <GoogleReviewLink className="mt-6" />
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="glass mx-auto max-w-xl space-y-7 rounded-2xl p-6 sm:p-8"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!canSubmit) return;
+        setSubmitting(true);
+        setSubmitError("");
+        try {
+          await submitSurveyWithIncentive({
+            branchRating,
+            serviceRating,
+            cashierId,
+            comments: comments.trim() || null,
+          });
+          setSubmitted(true);
+        } catch (err) {
+          setSubmitError(err instanceof Error ? err.message : "No se pudo enviar tu encuesta. Intenta de nuevo.");
+        } finally {
+          setSubmitting(false);
+        }
+      }}
+    >
+      <div>
+        <p className="mb-2 text-sm font-semibold">¿Cómo calificas la sucursal ({SITE.city})?</p>
+        <StarRating value={branchRating} onChange={setBranchRating} />
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-semibold">¿Cómo calificas el servicio recibido?</p>
+        <StarRating value={serviceRating} onChange={setServiceRating} />
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-semibold">Vota por tu cajero(a) favorito(a)</p>
+        {cashiersLoading ? (
+          <p className="text-xs text-carrot-50/50">Cargando cajeros...</p>
+        ) : cashiersError ? (
+          <p className="text-xs text-red-400">{cashiersError}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {cashiers?.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCashierId(c.id)}
+                className={cn(
+                  "rounded-xl p-3 text-center text-xs transition",
+                  cashierId === c.id ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
+                )}
+              >
+                <span className="block text-xl">{c.emoji}</span>
+                <span className="mt-1 block font-semibold">{c.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-carrot-50/50">
+          Los votos alimentan el sistema de incentivos y bonos del personal.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-semibold">Comentarios (opcional)</label>
+        <textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          rows={3}
+          placeholder="Cuéntanos más sobre tu visita..."
+          className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400"
+        />
+      </div>
+
+      {submitError && <p className="text-sm text-red-400">{submitError}</p>}
+
+      <button
+        type="submit"
+        disabled={!canSubmit || submitting}
+        className="w-full rounded-full bg-carrot-500 py-3 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {submitting ? "Enviando..." : "Enviar encuesta"}
+      </button>
+    </form>
+  );
+}
+</file>
+
+<file path="src/components/Footer.astro">
+---
+import { NAV_LINKS, PORTAL_LINKS, SITE, whatsappLink } from "@/data/site";
+---
+
+<footer class="mt-24 px-3 pb-6 sm:px-6">
+  <div class="glass mx-auto max-w-6xl rounded-3xl p-6 sm:p-10">
+    <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-carrot-400 to-leaf-500 text-lg">
+            🥕
+          </span>
+          <span class="font-semibold text-carrot-50">{SITE.name}</span>
+        </div>
+        <p class="mt-3 text-sm text-carrot-50/70">{SITE.tagline}</p>
+        <div class="mt-4 flex gap-2">
+          <a
+            href={SITE.social.instagram}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="glass glass-card rounded-full px-3 py-1.5 text-xs text-carrot-50/80"
+            >Instagram</a
+          >
+          <a
+            href={SITE.social.facebook}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="glass glass-card rounded-full px-3 py-1.5 text-xs text-carrot-50/80"
+            >Facebook</a
+          >
+        </div>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-carrot-300">Explora</p>
+        <ul class="mt-3 space-y-2 text-sm text-carrot-50/75">
+          {NAV_LINKS.map((link) => (
+            <li><a href={link.href} class="hover:text-carrot-200">{link.label}</a></li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-carrot-300">Portal interno</p>
+        <ul class="mt-3 space-y-2 text-sm text-carrot-50/75">
+          {PORTAL_LINKS.map((link) => (
+            <li><a href={link.href} class="hover:text-carrot-200">{link.label}</a></li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-carrot-300">Visítanos</p>
+        <ul class="mt-3 space-y-2 text-sm text-carrot-50/75">
+          <li>{SITE.address}</li>
+          <li>{SITE.city}, {SITE.state}, {SITE.country}</li>
+          <li>
+            <a href={`tel:+${SITE.phoneE164}`} class="hover:text-carrot-200">{SITE.phoneDisplay}</a>
+          </li>
+          <li>
+            <a href={whatsappLink("¡Hola! Tengo una pregunta")} class="hover:text-carrot-200">WhatsApp</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-8 flex flex-col gap-2 border-t border-carrot-50/10 pt-6 text-xs text-carrot-50/50 sm:flex-row sm:items-center sm:justify-between">
+      <p>© {new Date().getFullYear()} {SITE.name}. Demo funcional con datos de ejemplo.</p>
+      <p>Hecho con 🥕 en {SITE.city}, {SITE.state}</p>
+    </div>
+  </div>
+</footer>
+</file>
+
+<file path="src/data/inventory.ts">
+export type InventoryItem = {
+  ingredient: string;
+  stock: number;
+  unit: string;
+  min: number;
+};
+
+export const INVENTORY: InventoryItem[] = [
+  { ingredient: "Zanahoria fresca", stock: 38, unit: "kg", min: 15 },
+  { ingredient: "Pan artesanal", stock: 6, unit: "paquetes", min: 10 },
+  { ingredient: "Queso crema", stock: 4, unit: "kg", min: 5 },
+  { ingredient: "Aguacate", stock: 22, unit: "kg", min: 8 },
+  { ingredient: "Vasos para jugo", stock: 3, unit: "paquetes", min: 6 },
+  { ingredient: "Pechuga de pollo", stock: 18, unit: "kg", min: 10 },
+];
+
+export function isLowStock(item: InventoryItem) {
+  return item.stock <= item.min;
+}
+</file>
+
+<file path="src/data/plans.ts">
+export type Plan = {
+  id: string;
+  name: string;
+  price: number;
+  period: "mes";
+  emoji: string;
+  perk: string;
+  benefits: string[];
+  highlight?: boolean;
+};
+</file>
+
+<file path="src/data/products.ts">
+export type Category = {
+  id: string;
+  slug: string;
+  name: string;
+  emoji: string;
+};
+
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  categorySlug: string;
+  categoryName: string;
+  priceMedium: number | null;
+  priceLarge: number | null;
+};
+
+export type ProductVariant = {
+  id: string;
+  sizeLabel: "Mediano" | "Grande" | null;
+  price: number;
+};
+
+/** Un producto con un solo precio se vende en talla única; con ambos, el cliente elige. */
+export function getVariants(product: Product): ProductVariant[] {
+  const hasBoth = product.priceMedium != null && product.priceLarge != null;
+  const variants: ProductVariant[] = [];
+  if (product.priceMedium != null) {
+    variants.push({ id: `${product.id}--mediano`, sizeLabel: hasBoth ? "Mediano" : null, price: product.priceMedium });
+  }
+  if (product.priceLarge != null) {
+    variants.push({ id: `${product.id}--grande`, sizeLabel: hasBoth ? "Grande" : null, price: product.priceLarge });
+  }
+  return variants;
+}
+
+export function variantDisplayName(product: Product, variant: ProductVariant) {
+  return variant.sizeLabel ? `${product.name} (${variant.sizeLabel})` : product.name;
+}
+
+export function getCheapest(products: Product[], count: number): Product[] {
+  return [...products]
+    .sort((a, b) => (a.priceMedium ?? a.priceLarge ?? 0) - (b.priceMedium ?? b.priceLarge ?? 0))
+    .slice(0, count);
+}
+</file>
+
+<file path="src/data/promotions.ts">
+export type Coupon = {
+  code: string;
+  title: string;
+  description: string;
+  discount: string;
+  discountPercent?: number;
+  validUntil: string;
+  onlyOnline?: boolean;
+};
+</file>
+
+<file path="src/data/wholesale.ts">
+export type WholesaleItem = {
+  id: string;
+  name: string;
+  unit: string;
+  pricePerUnit: number;
+  minUnits: number;
+};
+
+export const WHOLESALE_ITEMS: WholesaleItem[] = [
+  { id: "jugos-caja", name: "Jugos prensados en frío (caja x12)", unit: "caja", pricePerUnit: 480, minUnits: 5 },
+  { id: "charolas-bocadillos", name: "Charola de bocadillos saludables", unit: "charola", pricePerUnit: 650, minUnits: 3 },
+  { id: "pasteles-zanahoria", name: "Pastel de zanahoria entero", unit: "pastel", pricePerUnit: 420, minUnits: 2 },
+  { id: "catering-persona", name: "Catering para evento (por persona)", unit: "persona", pricePerUnit: 145, minUnits: 20 },
+  { id: "bowls-oficina", name: "Bowls saludables para oficina", unit: "bowl", pricePerUnit: 119, minUnits: 15 },
+];
+
+export const VOLUME_DISCOUNTS = [
+  { minUnits: 100, discount: 0.15 },
+  { minUnits: 50, discount: 0.1 },
+  { minUnits: 20, discount: 0.05 },
+];
+
+export function discountFor(units: number) {
+  const tier = VOLUME_DISCOUNTS.find((t) => units >= t.minUnits);
+  return tier?.discount ?? 0;
+}
+</file>
+
 <file path="src/hooks/useMounted.ts">
 import { useEffect, useState } from "react";
 
@@ -1081,6 +2978,32 @@ export function useStaffSession() {
 }
 </file>
 
+<file path="src/hooks/useSupabaseData.ts">
+import { useEffect, useState } from "react";
+
+export function useSupabaseData<T>(fetcher: () => Promise<T>) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetcher()
+      .then((result) => {
+        if (active) setData(result);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "No se pudo cargar la información.");
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { data, error, loading: data === null && error === null };
+}
+</file>
+
 <file path="src/layouts/AdminLayout.astro">
 ---
 import "@/styles/global.css";
@@ -1109,6 +3032,49 @@ const { title } = Astro.props;
       <div class="ambient-blob h-[24rem] w-[24rem] bg-carrot-700 left-1/3 -bottom-24" style="animation-delay: -12s"></div>
     </div>
     <slot />
+  </body>
+</html>
+</file>
+
+<file path="src/layouts/Layout.astro">
+---
+import Navbar from "@/components/Navbar.astro";
+import Footer from "@/components/Footer.astro";
+import "@/styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = "Don Zanahorio — cocina fresca y saludable en Ciudad Victoria, Tamaulipas.",
+} = Astro.props;
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} · Don Zanahorio</title>
+  </head>
+  <body>
+    <div class="ambient-bg">
+      <div class="ambient-blob h-[26rem] w-[26rem] bg-carrot-500 -left-20 -top-20"></div>
+      <div class="ambient-blob h-[22rem] w-[22rem] bg-leaf-500 -right-10 top-1/3" style="animation-delay: -6s"></div>
+      <div class="ambient-blob h-[24rem] w-[24rem] bg-carrot-700 left-1/3 -bottom-24" style="animation-delay: -12s"></div>
+    </div>
+
+    <Navbar />
+    <main class="mx-auto min-h-[60vh] max-w-6xl px-3 py-10 sm:px-6 sm:py-16">
+      <slot />
+    </main>
+    <Footer />
   </body>
 </html>
 </file>
@@ -1147,9 +3113,37 @@ export function computeSubscriptionDiscount(
 }
 </file>
 
+<file path="src/lib/supabase.ts">
+import { createClient } from "@supabase/supabase-js";
+
+export const supabase = createClient(
+  import.meta.env.PUBLIC_SUPABASE_URL,
+  import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+);
+</file>
+
+<file path="src/lib/utils.ts">
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export function formatMXN(amount: number) {
+  return amount.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  });
+}
+</file>
+
 <file path="src/pages/api/checkout/create-session.ts">
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
+import { supabase } from "@/lib/supabase";
+import { computeShippingCost } from "@/lib/shipping";
 
 export const prerender = false;
 
@@ -1165,8 +3159,9 @@ export const POST: APIRoute = async ({ request }) => {
   const body = (await request.json()) as {
     orderId: string;
     items: Array<{ name: string; price: number; qty: number }>;
-    shippingCost: number;
-    discount: number;
+    couponCode: string | null;
+    contact: string | null;
+    subscriptionDiscount: number;
   };
 
   if (!body.orderId || !Array.isArray(body.items) || body.items.length === 0) {
@@ -1175,6 +3170,37 @@ export const POST: APIRoute = async ({ request }) => {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // Recompute shipping and the coupon discount from the order already
+  // persisted server-side, instead of trusting the numbers in this request
+  // body -- otherwise a personal, single-use coupon would be trivially
+  // spoofable by anyone who can read its code.
+  const { data: order, error: orderError } = await supabase.rpc("get_order_for_checkout", { p_order_id: body.orderId });
+  if (orderError || !order) {
+    return new Response(JSON.stringify({ error: "No se encontró el pedido." }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const subtotal = Number(order.subtotal);
+  const shippingCost = computeShippingCost({
+    fulfillment: order.fulfillmentType,
+    subtotal,
+    zone: order.distanceKm != null ? { id: "", name: "", distanceKm: Number(order.distanceKm) } : null,
+  }).cost;
+
+  let couponDiscount = 0;
+  if (body.couponCode) {
+    const { data: validated } = await supabase.rpc("validate_coupon", {
+      p_code: body.couponCode,
+      p_contact: body.contact ?? null,
+    });
+    if (validated?.discountPercent) {
+      couponDiscount = Math.round(subtotal * (validated.discountPercent / 100));
+    }
+  }
+  const discount = couponDiscount + Math.max(0, Number(body.subscriptionDiscount) || 0);
 
   const stripe = new Stripe(secretKey);
   const origin = request.headers.get("origin") ?? new URL(request.url).origin;
@@ -1188,21 +3214,21 @@ export const POST: APIRoute = async ({ request }) => {
     },
   }));
 
-  if (body.shippingCost > 0) {
+  if (shippingCost > 0) {
     lineItems.push({
       quantity: 1,
       price_data: {
         currency: "mxn",
-        unit_amount: Math.round(body.shippingCost * 100),
+        unit_amount: Math.round(shippingCost * 100),
         product_data: { name: "Envío" },
       },
     });
   }
 
   let discounts: Stripe.Checkout.SessionCreateParams.Discount[] | undefined;
-  if (body.discount > 0) {
+  if (discount > 0) {
     const coupon = await stripe.coupons.create({
-      amount_off: Math.round(body.discount * 100),
+      amount_off: Math.round(discount * 100),
       currency: "mxn",
       duration: "once",
     });
@@ -1261,7 +3287,16 @@ if (!sessionId || !orderId) {
       errorMessage = "El pago no se completó todavía.";
     }
   } catch (err) {
-    errorMessage = err instanceof Error ? err.message : "No se pudo verificar el pago.";
+    // Supabase RPC errors are plain objects, not Error instances -- without
+    // this fallback their .message (e.g. "forbidden" from mark_order_paid)
+    // was swallowed by a generic string, hiding the real cause.
+    if (err instanceof Error) {
+      errorMessage = err.message;
+    } else if (err && typeof err === "object" && "message" in err) {
+      errorMessage = String((err as { message: unknown }).message);
+    } else {
+      errorMessage = "No se pudo verificar el pago.";
+    }
   }
 }
 ---
@@ -1306,6 +3341,388 @@ import AdminDashboard from "@/components/islands/AdminDashboard";
 </AdminLayout>
 </file>
 
+<file path="src/pages/carrito.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import CartCheckout from "@/components/islands/CartCheckout";
+---
+
+<Layout title="Carrito" description="Revisa tu pedido y elige entrega o recolección en tienda.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🛒 Tu carrito
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Finaliza tu pedido</h1>
+  </header>
+
+  <CartCheckout client:load />
+</Layout>
+</file>
+
+<file path="src/pages/empleados.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import EmployeePortal from "@/components/islands/EmployeePortal";
+---
+
+<Layout title="Portal de empleados" description="Capacitación, manuales, recomendación de candidatos y bolsa de trabajo.">
+  <header class="mb-8">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🧑‍🍳 Portal interno
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Portal de empleados</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Capacitación, manuales de puesto, recomendación de candidatos y reclutamiento, compatible con tablets.
+    </p>
+  </header>
+
+  <EmployeePortal client:load />
+</Layout>
+</file>
+
+<file path="src/pages/encuestas.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import SurveyForm from "@/components/islands/SurveyForm";
+---
+
+<Layout title="Encuestas" description="Encuesta de satisfacción, evaluación de sucursal y votación de cajero favorito.">
+  <header class="mb-10 text-center">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      📝 Encuesta de satisfacción
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Cuéntanos cómo estuvo tu visita</h1>
+    <p class="mx-auto mt-3 max-w-xl text-sm text-carrot-50/70 sm:text-base">
+      Tu opinión nos ayuda a mejorar y a reconocer al equipo que te atendió.
+    </p>
+  </header>
+
+  <SurveyForm client:load />
+</Layout>
+</file>
+
+<file path="src/pages/fidelizacion.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import LoyaltyDashboard from "@/components/islands/LoyaltyDashboard";
+---
+
+<Layout title="Fidelización" description="Programa de puntos, monedero electrónico, gift cards y código QR.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      💳 Fidelización
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Tu monedero Don Zanahorio</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Acumula mínimo 10% de cada compra en puntos, guarda saldo en tu monedero digital y valida todo con tu código
+      QR personal.
+    </p>
+  </header>
+
+  <LoyaltyDashboard client:load />
+</Layout>
+</file>
+
+<file path="src/pages/mayoreo.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import MayoreoForm from "@/components/islands/MayoreoForm";
+---
+
+<Layout title="Pedidos de mayoreo" description="Cotiza pedidos por volumen para eventos, oficinas y negocios.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      📦 Mayoreo
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Pedidos por volumen</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Ideal para oficinas, eventos y catering. Elige el producto y la cantidad para ver tu cotización automática al
+      instante.
+    </p>
+  </header>
+
+  <MayoreoForm client:load />
+</Layout>
+</file>
+
+<file path="src/pages/menu.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import MenuCatalog from "@/components/islands/MenuCatalog";
+---
+
+<Layout title="Menú digital" description="Explora el menú completo de Don Zanahorio y arma tu pedido.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🍽️ Menú digital
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Elige, agrega y ordena</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Todo nuestro catálogo, siempre actualizado. Agrega tus platillos favoritos al carrito y finaliza tu pedido
+      para recoger en tienda o recibirlo a domicilio.
+    </p>
+  </header>
+
+  <MenuCatalog client:load />
+</Layout>
+</file>
+
+<file path="src/pages/promociones.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import PromotionsBoard from "@/components/islands/PromotionsBoard";
+import GoogleReviewLink from "@/components/islands/GoogleReviewLink";
+import { SITE } from "@/data/site";
+---
+
+<Layout title="Promociones" description="Cupones automáticos, descuentos exclusivos web y productos destacados.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🏷️ Promociones
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Cupones y descuentos vigentes</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Aplica estos cupones directamente en tu carrito. Los descuentos web son exclusivos para pedidos en línea.
+    </p>
+  </header>
+
+  <PromotionsBoard client:load />
+
+  <section class="glass-strong mt-16 rounded-[2rem] px-6 py-12 text-center sm:px-14">
+    <span class="text-4xl">⭐</span>
+    <h2 class="mt-4 text-2xl font-bold sm:text-3xl">Déjanos tu reseña en Google</h2>
+    <p class="mx-auto mt-3 max-w-xl text-sm text-carrot-50/70">
+      Comparte tu experiencia en {SITE.city} y recibe un cupón para tu próxima visita. Registramos tu reseña con tu
+      cuenta de fidelización para hacerte llegar el beneficio.
+    </p>
+    <GoogleReviewLink client:load className="mt-6" />
+  </section>
+</Layout>
+</file>
+
+<file path="src/pages/suscripciones.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import PlansList from "@/components/islands/PlansList";
+---
+
+<Layout title="Suscripciones" description="Membresías mensuales con precio preferencial, validadas por QR o teléfono.">
+  <header class="mb-10">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🔁 Membresías
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Suscripciones mensuales</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Precio preferencial todos los días. Se valida con tu código QR o número telefónico, tanto en sucursal como a
+      domicilio.
+    </p>
+  </header>
+
+  <PlansList client:load />
+
+  <p class="mt-8 text-center text-xs text-carrot-50/50">
+    Todos los planes se pueden cancelar en cualquier momento desde tu cuenta de fidelización.
+  </p>
+</Layout>
+</file>
+
+<file path="src/stores/cart.ts">
+import { computed } from "nanostores";
+import { persistentMap } from "@nanostores/persistent";
+
+export type CartLine = {
+  id: string;
+  name: string;
+  price: number;
+  qty: number;
+  emoji: string;
+};
+
+type CartState = Record<string, string>;
+
+export const $cartRaw = persistentMap<CartState>("dz-cart:", {});
+
+function readLine(key: string): CartLine | null {
+  const raw = $cartRaw.get()[key];
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CartLine;
+  } catch {
+    return null;
+  }
+}
+
+export function getCartLines(): CartLine[] {
+  return Object.keys($cartRaw.get())
+    .map(readLine)
+    .filter((l): l is CartLine => l !== null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export const $cartLines = computed($cartRaw, () => getCartLines());
+
+export const $cartCount = computed($cartLines, (lines) =>
+  lines.reduce((sum, l) => sum + l.qty, 0)
+);
+
+export const $cartTotal = computed($cartLines, (lines) =>
+  lines.reduce((sum, l) => sum + l.qty * l.price, 0)
+);
+
+export function addToCart(item: Omit<CartLine, "qty">, qty = 1) {
+  const existing = readLine(item.id);
+  const nextQty = (existing?.qty ?? 0) + qty;
+  $cartRaw.setKey(item.id, JSON.stringify({ ...item, qty: nextQty }));
+}
+
+export function setQty(id: string, qty: number) {
+  const existing = readLine(id);
+  if (!existing) return;
+  if (qty <= 0) {
+    $cartRaw.setKey(id, undefined as unknown as string);
+    return;
+  }
+  $cartRaw.setKey(id, JSON.stringify({ ...existing, qty }));
+}
+
+export function removeFromCart(id: string) {
+  $cartRaw.setKey(id, undefined as unknown as string);
+}
+
+export function clearCart() {
+  for (const key of Object.keys($cartRaw.get())) {
+    $cartRaw.setKey(key, undefined as unknown as string);
+  }
+}
+</file>
+
+<file path="src/styles/global.css">
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+
+  /* Zanahoria — naranja cálido de marca */
+  --color-carrot-50: #fff4ec;
+  --color-carrot-100: #ffe4cf;
+  --color-carrot-200: #ffc79b;
+  --color-carrot-300: #ffa25e;
+  --color-carrot-400: #ff8a3d;
+  --color-carrot-500: #ff7a1a;
+  --color-carrot-600: #f2620a;
+  --color-carrot-700: #c94b08;
+  --color-carrot-800: #9e3b0d;
+  --color-carrot-900: #7f320f;
+
+  /* Hoja de zanahoria — verde fresco */
+  --color-leaf-50: #eefdf3;
+  --color-leaf-100: #d5f9e0;
+  --color-leaf-200: #adf1c4;
+  --color-leaf-300: #74e29f;
+  --color-leaf-400: #3fca7a;
+  --color-leaf-500: #1fae5f;
+  --color-leaf-600: #148c4c;
+  --color-leaf-700: #126f3f;
+  --color-leaf-800: #125835;
+  --color-leaf-900: #10482d;
+
+  /* Fondo "tierra" profundo para el efecto de vidrio */
+  --color-ink-950: #0f0b09;
+  --color-ink-900: #17110d;
+  --color-ink-800: #241a13;
+  --color-ink-700: #33241a;
+
+  --shadow-glass: 0 8px 32px 0 rgba(15, 11, 9, 0.45);
+  --shadow-glass-lg: 0 24px 64px -12px rgba(15, 11, 9, 0.6);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ink-950);
+    color: var(--color-carrot-50);
+    font-family: var(--font-sans);
+    min-height: 100svh;
+  }
+
+  ::selection {
+    background-color: var(--color-carrot-500);
+    color: var(--color-ink-950);
+  }
+}
+
+@layer components {
+  /* Fondo ambiental con manchas de color desenfocadas, fijo detrás de todo */
+  .ambient-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 0%, rgba(255, 122, 26, 0.35), transparent 60%),
+      radial-gradient(ellipse 70% 60% at 100% 20%, rgba(31, 174, 95, 0.28), transparent 55%),
+      radial-gradient(ellipse 60% 50% at 50% 100%, rgba(255, 138, 61, 0.2), transparent 60%),
+      var(--color-ink-950);
+  }
+
+  .ambient-blob {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(90px);
+    opacity: 0.55;
+    animation: float 18s ease-in-out infinite;
+  }
+
+  .glass {
+    background: rgba(255, 244, 236, 0.06);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 244, 236, 0.14);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-strong {
+    background: rgba(255, 244, 236, 0.1);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid rgba(255, 244, 236, 0.18);
+    box-shadow: var(--shadow-glass-lg);
+  }
+
+  .glass-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .glass-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255, 138, 61, 0.4);
+  }
+
+  .text-gradient {
+    background: linear-gradient(100deg, var(--color-carrot-300), var(--color-leaf-300));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(3%, 4%) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob {
+    animation: none;
+  }
+}
+</file>
+
 <file path="playwright.config.ts">
 import { defineConfig, devices } from "@playwright/test";
 
@@ -1345,6 +3762,60 @@ export default defineConfig({
     timeout: 120_000,
   },
 });
+</file>
+
+<file path="pnpm-workspace.yaml">
+allowBuilds:
+  esbuild: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - astro@7.1.4
+</file>
+
+<file path="README.md">
+# Astro Starter Kit: Minimal
+
+```sh
+pnpm create astro@latest -- --template minimal
+```
+
+> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+
+## 🚀 Project Structure
+
+Inside of your Astro project, you'll see the following folders and files:
+
+```text
+/
+├── public/
+├── src/
+│   └── pages/
+│       └── index.astro
+└── package.json
+```
+
+Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+
+There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+
+Any static assets, like images, can be placed in the `public/` directory.
+
+## 🧞 Commands
+
+All commands are run from the root of the project, from a terminal:
+
+| Command                   | Action                                           |
+| :------------------------ | :----------------------------------------------- |
+| `pnpm install`             | Installs dependencies                            |
+| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
+| `pnpm build`           | Build your production site to `./dist/`          |
+| `pnpm preview`         | Preview your build locally, before deploying     |
+| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
+| `pnpm astro -- --help` | Get help using the Astro CLI                     |
+
+## 👀 Want to learn more?
+
+Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
 </file>
 
 <file path="requerimientos-don-zanahorio.md">
@@ -1457,18 +3928,6 @@ Desarrollar una plataforma web moderna e integrada con un sistema de punto de ve
 * Carga de CV y documentos.
 </file>
 
-<file path="public/favicon.svg">
-<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 128 128">
-    <path d="M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z" />
-    <style>
-        path { fill: #000; }
-        @media (prefers-color-scheme: dark) {
-            path { fill: #FFF; }
-        }
-    </style>
-</svg>
-</file>
-
 <file path="src/components/islands/CartBadge.tsx">
 import { useStore } from "@nanostores/react";
 import { ShoppingBasket } from "lucide-react";
@@ -1505,12 +3964,20 @@ import { useStore } from "@nanostores/react";
 import { Minus, Plus, ShoppingBasket, Trash2 } from "lucide-react";
 import { $cartLines, $cartTotal, clearCart, removeFromCart, setQty } from "@/stores/cart";
 import { SITE, whatsappLink } from "@/data/site";
-import { fetchCoupons, submitOrder, awardOrderPoints, lookupLoyaltyCustomer } from "@/lib/queries";
+import {
+  fetchDeliveryZones,
+  submitOrder,
+  awardOrderPoints,
+  lookupLoyaltyCustomer,
+  validateCoupon,
+  redeemCustomerCoupon,
+} from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { $loyaltyContact } from "@/stores/loyalty";
 import { cn, formatMXN } from "@/lib/utils";
 import { useMounted } from "@/hooks/useMounted";
 import { computeSubscriptionDiscount } from "@/lib/subscriptionDiscount";
+import { computeShippingCost } from "@/lib/shipping";
 
 type Fulfillment = "pickup" | "delivery";
 type Payment = "card" | "cash";
@@ -1524,15 +3991,18 @@ export default function CartCheckout() {
   const mounted = useMounted();
   const displayLines = mounted ? lines : [];
   const savedContact = useStore($loyaltyContact);
-  const { data: coupons } = useSupabaseData(fetchCoupons);
+  const { data: zones } = useSupabaseData(fetchDeliveryZones);
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
   const [payment, setPayment] = useState<Payment>("card");
   const [address, setAddress] = useState("");
+  const [zoneId, setZoneId] = useState<string | null>(null);
   const [loyaltyContact, setLoyaltyContact] = useState(savedContact ?? "");
   const [subscriberPlanId, setSubscriberPlanId] = useState<string | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [appliedCouponKind, setAppliedCouponKind] = useState<"personal" | "global" | null>(null);
+  const [appliedCouponPercent, setAppliedCouponPercent] = useState<number | null>(null);
   const [couponNote, setCouponNote] = useState("");
   const [couponError, setCouponError] = useState("");
   const [confirmedOrder, setConfirmedOrder] = useState<number | null>(null);
@@ -1540,18 +4010,17 @@ export default function CartCheckout() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  const selectedZone = zones?.find((z) => z.id === zoneId) ?? null;
+
   const shipping = useMemo(() => {
-    if (fulfillment === "pickup" || lines.length === 0) return 0;
-    if (subtotal >= SITE.shipping.freeThreshold) return 0;
-    return SITE.shipping.baseCost;
-  }, [fulfillment, subtotal, lines.length]);
+    if (lines.length === 0) return 0;
+    return computeShippingCost({ fulfillment, subtotal, zone: selectedZone }).cost;
+  }, [fulfillment, subtotal, selectedZone, lines.length]);
 
   const discount = useMemo(() => {
-    if (!appliedCoupon) return 0;
-    const match = coupons?.find((c) => c.code === appliedCoupon);
-    if (!match?.discountPercent) return 0;
-    return Math.round(subtotal * (match.discountPercent / 100));
-  }, [appliedCoupon, coupons, subtotal]);
+    if (!appliedCoupon || !appliedCouponPercent) return 0;
+    return Math.round(subtotal * (appliedCouponPercent / 100));
+  }, [appliedCoupon, appliedCouponPercent, subtotal]);
 
   const subscriptionDiscount = useMemo(
     () => computeSubscriptionDiscount(subscriberPlanId, lines, subtotal),
@@ -1581,18 +4050,29 @@ export default function CartCheckout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyCoupon() {
+  async function applyCoupon() {
     const code = couponInput.trim().toUpperCase();
-    const match = coupons?.find((c) => c.code === code);
-    if (!match) {
-      setCouponError("Cupón no válido o vencido.");
-      setCouponNote("");
-      setAppliedCoupon(null);
-      return;
-    }
+    if (!code) return;
     setCouponError("");
-    setAppliedCoupon(code);
-    setCouponNote(match.discountPercent ? "" : `Este cupón (${match.discount}) se aplica directamente en tienda.`);
+    try {
+      const result = await validateCoupon(code, loyaltyContact.trim() || null);
+      if (!result) {
+        setCouponError("Cupón no válido, vencido o ya utilizado.");
+        setCouponNote("");
+        setAppliedCoupon(null);
+        setAppliedCouponKind(null);
+        setAppliedCouponPercent(null);
+        return;
+      }
+      setAppliedCoupon(result.code);
+      setAppliedCouponKind(result.kind);
+      setAppliedCouponPercent(result.discountPercent);
+      setCouponNote(
+        result.discountPercent ? "" : `Este cupón (${result.discountLabel ?? result.title}) se aplica directamente en tienda.`
+      );
+    } catch (err) {
+      setCouponError(err instanceof Error ? err.message : "No se pudo validar el cupón.");
+    }
   }
 
   async function confirmOrder() {
@@ -1611,7 +4091,13 @@ export default function CartCheckout() {
         couponCode: appliedCoupon,
         total,
         items: lines.map((l) => ({ name: l.name, price: l.price, qty: l.qty })),
+        deliveryZoneId: fulfillment === "delivery" ? zoneId : null,
+        distanceKm: fulfillment === "delivery" ? selectedZone?.distanceKm ?? null : null,
       });
+
+      if (appliedCoupon && appliedCouponKind === "personal") {
+        redeemCustomerCoupon(appliedCoupon, orderId).catch(() => {});
+      }
 
       if (loyaltyContact.trim()) {
         awardOrderPoints(orderId, loyaltyContact.trim()).catch(() => {});
@@ -1625,8 +4111,9 @@ export default function CartCheckout() {
           body: JSON.stringify({
             orderId,
             items: lines.map((l) => ({ name: l.name, price: l.price, qty: l.qty })),
-            shippingCost: shipping,
-            discount: totalDiscount,
+            couponCode: appliedCoupon,
+            contact: loyaltyContact.trim() || null,
+            subscriptionDiscount: subscriptionDiscount?.amount ?? 0,
           }),
         });
         const data = await res.json();
@@ -1762,7 +4249,21 @@ export default function CartCheckout() {
             ))}
           </div>
           {fulfillment === "delivery" && (
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
+              <select
+                value={zoneId ?? ""}
+                onChange={(e) => setZoneId(e.target.value || null)}
+                className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
+              >
+                <option value="" className="bg-ink-900">
+                  Selecciona tu zona de entrega...
+                </option>
+                {zones?.map((z) => (
+                  <option key={z.id} value={z.id} className="bg-ink-900">
+                    {z.name} (~{z.distanceKm} km)
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={address}
@@ -1770,8 +4271,9 @@ export default function CartCheckout() {
                 placeholder="Dirección de entrega en Ciudad Victoria"
                 className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400"
               />
-              <p className="mt-1.5 text-xs text-carrot-50/50">
-                Envío gratis en pedidos desde {formatMXN(SITE.shipping.freeThreshold)}.
+              <p className="text-xs text-carrot-50/50">
+                Envío gratis en pedidos desde {formatMXN(SITE.shipping.freeThreshold)}. El costo se calcula
+                automáticamente según tu zona.
               </p>
             </div>
           )}
@@ -1885,33 +4387,6 @@ export default function CartCheckout() {
 }
 </file>
 
-<file path="src/components/islands/CategoriesGrid.tsx">
-import { fetchCategories } from "@/lib/queries";
-import { useSupabaseData } from "@/hooks/useSupabaseData";
-
-export default function CategoriesGrid() {
-  const { data: categories, error, loading } = useSupabaseData(fetchCategories);
-
-  if (loading) return <p className="mt-8 text-sm text-carrot-50/60">Cargando categorías...</p>;
-  if (error) return <p className="mt-8 text-sm text-red-400">{error}</p>;
-
-  return (
-    <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-      {categories?.map((c) => (
-        <a
-          key={c.slug}
-          href={`/menu?categoria=${c.slug}`}
-          className="glass glass-card flex flex-col items-center rounded-2xl p-6 text-center"
-        >
-          <span className="text-4xl">{c.emoji}</span>
-          <h3 className="mt-3 font-semibold">{c.name}</h3>
-        </a>
-      ))}
-    </div>
-  );
-}
-</file>
-
 <file path="src/components/islands/EmployeePortal.tsx">
 import { useEffect, useState } from "react";
 import type { JobPosition } from "@/data/team";
@@ -1923,13 +4398,70 @@ import {
   submitEmployeeReferral,
   submitJobApplication,
   uploadJobApplicationCv,
+  fetchEmployeeBonusLedger,
 } from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import StaffLogin from "@/components/islands/StaffLogin";
-import { cn } from "@/lib/utils";
+import { cn, formatMXN } from "@/lib/utils";
 
-type Tab = "capacitacion" | "manuales" | "referidos" | "bolsa";
+type Tab = "capacitacion" | "manuales" | "referidos" | "bolsa" | "bonos";
+
+function BonusPanel({ employeeId }: { employeeId: string }) {
+  const [ledger, setLedger] = useState<Awaited<ReturnType<typeof fetchEmployeeBonusLedger>> | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchEmployeeBonusLedger(employeeId)
+      .then(setLedger)
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar tu historial de bonos."));
+  }, [employeeId]);
+
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
+  if (ledger === null) return <p className="text-sm text-carrot-50/60">Cargando tus bonos...</p>;
+
+  const balance = ledger.reduce((sum, t) => sum + t.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="glass glass-card rounded-2xl p-5">
+        <p className="text-xs font-medium text-carrot-50/60">Saldo acumulado</p>
+        <p className="mt-2 text-2xl font-bold text-carrot-50">{formatMXN(balance)}</p>
+        <p className="mt-1 text-xs text-carrot-50/50">
+          Se abona por cada encuesta con buena calificación de servicio en la que un cliente vote por ti.
+        </p>
+      </div>
+      {ledger.length === 0 ? (
+        <p className="text-sm text-carrot-50/50">Todavía no tienes movimientos.</p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full text-sm">
+            <thead className="border-b border-carrot-50/10 text-left text-[11px] uppercase tracking-wide text-carrot-50/50">
+              <tr>
+                <th className="px-4 py-3 font-medium">Tipo</th>
+                <th className="px-4 py-3 font-medium">Monto</th>
+                <th className="px-4 py-3 font-medium">Nota</th>
+                <th className="px-4 py-3 font-medium">Fecha</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-carrot-50/10">
+              {ledger.map((t) => (
+                <tr key={t.id} className="hover:bg-carrot-50/5">
+                  <td className="px-4 py-3 text-carrot-50/80">
+                    {t.type === "survey_incentive" ? "Encuesta" : t.type === "payout" ? "Pago recibido" : "Ajuste"}
+                  </td>
+                  <td className={cn("px-4 py-3 font-semibold", t.amount < 0 ? "text-red-300" : "text-leaf-300")}>{formatMXN(t.amount)}</td>
+                  <td className="px-4 py-3 text-xs text-carrot-50/60">{t.note ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-carrot-50/50">{new Date(t.createdAt).toLocaleDateString("es-MX")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PositionSelect({
   positions,
@@ -2165,6 +4697,7 @@ export default function EmployeePortal() {
     { id: "manuales", label: "Manuales y puestos" },
     { id: "referidos", label: "Recomendar candidato" },
     { id: "bolsa", label: "Bolsa de trabajo" },
+    { id: "bonos", label: "Mis bonos" },
   ];
 
   return (
@@ -2271,32 +4804,8 @@ export default function EmployeePortal() {
 
       {tab === "referidos" && (positions ? <ReferralForm positions={positions} /> : <p className="text-sm text-carrot-50/60">Cargando puestos...</p>)}
       {tab === "bolsa" && (positions ? <JobApplicationForm positions={positions} /> : <p className="text-sm text-carrot-50/60">Cargando puestos...</p>)}
+      {tab === "bonos" && <BonusPanel employeeId={employee.id} />}
     </div>
-  );
-}
-</file>
-
-<file path="src/components/islands/GoogleReviewLink.tsx">
-import { SITE } from "@/data/site";
-import { submitGoogleReviewClick } from "@/lib/queries";
-import { cn } from "@/lib/utils";
-
-export default function GoogleReviewLink({ className }: { className?: string }) {
-  return (
-    <a
-      href={SITE.googleReviewUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={() => {
-        submitGoogleReviewClick().catch(() => {});
-      }}
-      className={cn(
-        "inline-block rounded-full bg-carrot-500 px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-carrot-400",
-        className
-      )}
-    >
-      Escribir reseña en Google
-    </a>
   );
 }
 </file>
@@ -2628,403 +5137,6 @@ export default function LoyaltyDashboard() {
         </div>
         {copied && <p className="mt-2 text-xs text-leaf-300">Código copiado ✓</p>}
       </div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/islands/MayoreoForm.tsx">
-import { useMemo, useState } from "react";
-import { discountFor, WHOLESALE_ITEMS } from "@/data/wholesale";
-import { SITE, whatsappLink } from "@/data/site";
-import { submitWholesaleOrder } from "@/lib/queries";
-import { cn, formatMXN } from "@/lib/utils";
-
-type Fulfillment = "pickup" | "delivery";
-
-export default function MayoreoForm() {
-  const [itemId, setItemId] = useState(WHOLESALE_ITEMS[0].id);
-  const [units, setUnits] = useState(WHOLESALE_ITEMS[0].minUnits);
-  const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
-  const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [phone, setPhone] = useState("");
-  const [eventDate, setEventDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-
-  const item = WHOLESALE_ITEMS.find((i) => i.id === itemId)!;
-
-  const quote = useMemo(() => {
-    const discount = discountFor(units);
-    const subtotal = units * item.pricePerUnit;
-    const discountAmount = Math.round(subtotal * discount);
-    const shipping = fulfillment === "delivery" ? SITE.shipping.baseCost * 2 : 0;
-    const total = subtotal - discountAmount + shipping;
-    return { discount, subtotal, discountAmount, shipping, total };
-  }, [units, item, fulfillment]);
-
-  const canSubmit = name.trim().length > 1 && phone.trim().length >= 10 && units >= item.minUnits;
-
-  if (submitted) {
-    const message = `¡Hola! Soy ${name}${company ? ` de ${company}` : ""}. Quiero cotizar ${units} ${item.unit}(s) de "${item.name}" para ${
-      fulfillment === "pickup" ? "recoger en tienda" : "entrega a domicilio"
-    }${eventDate ? `, fecha: ${eventDate}` : ""}. Cotización estimada: ${formatMXN(quote.total)}.`;
-
-    return (
-      <div className="glass-strong mx-auto max-w-lg rounded-3xl p-8 text-center">
-        <span className="text-5xl">📦</span>
-        <h2 className="mt-4 text-2xl font-bold">¡Solicitud recibida!</h2>
-        <p className="mt-2 text-sm text-carrot-50/70">
-          Nuestro equipo confirmará disponibilidad y te enviará la cotización final.
-        </p>
-        <a
-          href={whatsappLink(message)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-6 inline-block rounded-full bg-leaf-500 px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-leaf-400"
-        >
-          Enviar detalles por WhatsApp
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-      <form
-        className="glass space-y-5 rounded-2xl p-6"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (!canSubmit) return;
-          setSubmitting(true);
-          setSubmitError("");
-          try {
-            await submitWholesaleOrder({
-              customerName: name.trim(),
-              company: company.trim() || null,
-              phone: phone.trim(),
-              itemName: item.name,
-              units,
-              unitPrice: item.pricePerUnit,
-              fulfillmentType: fulfillment,
-              eventDate: eventDate || null,
-              notes: notes.trim() || null,
-              quoteTotal: quote.total,
-            });
-            setSubmitted(true);
-          } catch (err) {
-            setSubmitError(err instanceof Error ? err.message : "No se pudo enviar tu solicitud. Intenta de nuevo.");
-          } finally {
-            setSubmitting(false);
-          }
-        }}
-      >
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold">Producto</label>
-          <select
-            value={itemId}
-            onChange={(e) => {
-              const next = WHOLESALE_ITEMS.find((i) => i.id === e.target.value)!;
-              setItemId(next.id);
-              setUnits(next.minUnits);
-            }}
-            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-          >
-            {WHOLESALE_ITEMS.map((i) => (
-              <option className="bg-ink-900" key={i.id} value={i.id}>
-                {i.name} — {formatMXN(i.pricePerUnit)}/{i.unit}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold">
-            Cantidad ({item.unit}s, mínimo {item.minUnits})
-          </label>
-          <input
-            type="number"
-            min={item.minUnits}
-            value={units}
-            onChange={(e) => setUnits(Math.max(item.minUnits, Number(e.target.value) || item.minUnits))}
-            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          {(["pickup", "delivery"] as Fulfillment[]).map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => setFulfillment(opt)}
-              className={cn(
-                "rounded-xl px-4 py-2.5 text-sm font-medium transition",
-                fulfillment === opt ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
-              )}
-            >
-              {opt === "pickup" ? "🏬 Recoger en tienda" : "🚚 Entrega a domicilio"}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">Nombre completo</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">Empresa (opcional)</label>
-            <input
-              type="text"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">Teléfono</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold">Fecha del evento</label>
-            <input
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold">Notas adicionales</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-carrot-400"
-          />
-        </div>
-
-        {submitError && <p className="text-sm text-red-400">{submitError}</p>}
-
-        <button
-          type="submit"
-          disabled={!canSubmit || submitting}
-          className="w-full rounded-full bg-carrot-500 py-3 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {submitting ? "Enviando..." : "Solicitar cotización"}
-        </button>
-      </form>
-
-      <div className="glass-strong h-fit rounded-2xl p-6">
-        <h2 className="mb-4 text-lg font-semibold">Cotización estimada</h2>
-        <dl className="space-y-2 text-sm">
-          <div className="flex justify-between text-carrot-50/70">
-            <dt>
-              {units} × {formatMXN(item.pricePerUnit)}
-            </dt>
-            <dd>{formatMXN(quote.subtotal)}</dd>
-          </div>
-          {quote.discount > 0 && (
-            <div className="flex justify-between text-leaf-300">
-              <dt>Descuento por volumen ({Math.round(quote.discount * 100)}%)</dt>
-              <dd>-{formatMXN(quote.discountAmount)}</dd>
-            </div>
-          )}
-          <div className="flex justify-between text-carrot-50/70">
-            <dt>Envío</dt>
-            <dd>{quote.shipping === 0 ? "Incluido" : formatMXN(quote.shipping)}</dd>
-          </div>
-          <div className="flex justify-between border-t border-carrot-50/15 pt-3 text-base font-bold">
-            <dt>Total estimado</dt>
-            <dd>{formatMXN(quote.total)}</dd>
-          </div>
-        </dl>
-        <p className="mt-4 text-xs text-carrot-50/50">
-          Cotización sujeta a confirmación final. Descuentos por volumen: 5% desde 20 unidades, 10% desde 50, 15% desde 100.
-        </p>
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/islands/MenuCatalog.tsx">
-import { useMemo, useState } from "react";
-import { useStore } from "@nanostores/react";
-import { Minus, Plus, Search } from "lucide-react";
-import { getVariants, variantDisplayName, type Product } from "@/data/products";
-import { $cartRaw, addToCart, setQty } from "@/stores/cart";
-import { formatMXN, cn } from "@/lib/utils";
-import { fetchCategories, fetchProducts } from "@/lib/queries";
-import { useSupabaseData } from "@/hooks/useSupabaseData";
-
-function useQty(id: string) {
-  const raw = useStore($cartRaw);
-  const entry = raw[id];
-  if (!entry) return 0;
-  try {
-    return (JSON.parse(entry) as { qty: number }).qty ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
-function VariantRow({ product, variant, emoji }: { product: Product; variant: ReturnType<typeof getVariants>[number]; emoji: string }) {
-  const qty = useQty(variant.id);
-
-  return (
-    <div className="flex items-center justify-between rounded-xl bg-carrot-50/5 px-3 py-2">
-      <span className="text-xs text-carrot-50/70">
-        {variant.sizeLabel ?? "Precio"} · <span className="font-semibold text-carrot-200">{formatMXN(variant.price)}</span>
-      </span>
-      {qty === 0 ? (
-        <button
-          type="button"
-          onClick={() => addToCart({ id: variant.id, name: variantDisplayName(product, variant), price: variant.price, emoji }, 1)}
-          className="rounded-full bg-carrot-500 px-3 py-1 text-xs font-semibold text-ink-950 transition hover:bg-carrot-400"
-        >
-          Agregar
-        </button>
-      ) : (
-        <div className="glass flex items-center gap-2 rounded-full px-2 py-0.5">
-          <button
-            type="button"
-            aria-label="Quitar uno"
-            onClick={() => setQty(variant.id, qty - 1)}
-            className="grid h-6 w-6 place-items-center rounded-full bg-carrot-50/10 hover:bg-carrot-50/20"
-          >
-            <Minus size={12} />
-          </button>
-          <span className="w-4 text-center text-xs font-semibold">{qty}</span>
-          <button
-            type="button"
-            aria-label="Agregar uno"
-            onClick={() => addToCart({ id: variant.id, name: variantDisplayName(product, variant), price: variant.price, emoji }, 1)}
-            className="grid h-6 w-6 place-items-center rounded-full bg-carrot-500 text-ink-950 hover:bg-carrot-400"
-          >
-            <Plus size={12} />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProductCard({ product, emoji }: { product: Product; emoji: string }) {
-  const variants = getVariants(product);
-
-  return (
-    <div className="glass glass-card flex flex-col rounded-2xl p-5">
-      <span className="text-3xl">{emoji}</span>
-      <h3 className="mt-3 font-semibold text-carrot-50">{product.name}</h3>
-      <p className="mt-1 flex-1 text-xs text-carrot-50/65">{product.description}</p>
-      <div className="mt-4 space-y-2">
-        {variants.map((variant) => (
-          <VariantRow key={variant.id} product={product} variant={variant} emoji={emoji} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function initialCategory() {
-  if (typeof window === "undefined") return "Todos";
-  return new URLSearchParams(window.location.search).get("categoria") || "Todos";
-}
-
-export default function MenuCatalog() {
-  const [category, setCategory] = useState<string>(initialCategory);
-  const [query, setQuery] = useState("");
-  const { data: categories, error: categoriesError, loading: categoriesLoading } = useSupabaseData(fetchCategories);
-  const { data: products, error: productsError, loading: productsLoading } = useSupabaseData(fetchProducts);
-
-  const emojiBySlug = useMemo(() => {
-    const map: Record<string, string> = {};
-    categories?.forEach((c) => (map[c.slug] = c.emoji));
-    return map;
-  }, [categories]);
-
-  const filtered = useMemo(() => {
-    return (products ?? []).filter((p) => {
-      const matchesCategory = category === "Todos" || p.categorySlug === category;
-      const matchesQuery = p.name.toLowerCase().includes(query.trim().toLowerCase());
-      return matchesCategory && matchesQuery;
-    });
-  }, [products, category, query]);
-
-  const loading = categoriesLoading || productsLoading;
-  const error = categoriesError || productsError;
-
-  return (
-    <div>
-      <div className="glass sticky top-20 z-20 flex flex-col gap-4 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setCategory("Todos")}
-            className={cn(
-              "rounded-full px-3 py-1.5 text-xs font-medium transition",
-              category === "Todos" ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
-            )}
-          >
-            Todos
-          </button>
-          {categories?.map((c) => (
-            <button
-              key={c.slug}
-              type="button"
-              onClick={() => setCategory(c.slug)}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition",
-                category === c.slug ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
-              )}
-            >
-              {c.emoji} {c.name}
-            </button>
-          ))}
-        </div>
-        <div className="relative">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-carrot-50/50" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar platillo..."
-            className="w-full rounded-full bg-carrot-50/10 py-2 pl-9 pr-4 text-sm text-carrot-50 placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400 sm:w-56"
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <p className="mt-10 text-center text-sm text-carrot-50/60">Cargando menú...</p>
-      ) : error ? (
-        <p className="mt-10 text-center text-sm text-red-400">{error}</p>
-      ) : filtered.length === 0 ? (
-        <p className="mt-10 text-center text-sm text-carrot-50/60">No encontramos platillos con ese criterio.</p>
-      ) : (
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((product) => (
-            <ProductCard key={product.id} product={product} emoji={emojiBySlug[product.categorySlug] ?? "🍽️"} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -3673,229 +5785,6 @@ export default function QrPreview({ seed, size = 220 }: { seed: string; size?: n
 }
 </file>
 
-<file path="src/components/islands/StarRating.tsx">
-import { Star } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-export default function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          aria-label={`${n} estrellas`}
-          onClick={() => onChange(n)}
-          className="p-0.5"
-        >
-          <Star
-            size={26}
-            className={cn(n <= value ? "fill-carrot-400 text-carrot-400" : "text-carrot-50/25")}
-          />
-        </button>
-      ))}
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/islands/SurveyForm.tsx">
-import { useState } from "react";
-import StarRating from "@/components/islands/StarRating";
-import GoogleReviewLink from "@/components/islands/GoogleReviewLink";
-import { SITE } from "@/data/site";
-import { fetchCashiers, submitSurvey } from "@/lib/queries";
-import { useSupabaseData } from "@/hooks/useSupabaseData";
-import { cn } from "@/lib/utils";
-
-export default function SurveyForm() {
-  const { data: cashiers, error: cashiersError, loading: cashiersLoading } = useSupabaseData(fetchCashiers);
-  const [branchRating, setBranchRating] = useState(0);
-  const [serviceRating, setServiceRating] = useState(0);
-  const [cashierId, setCashierId] = useState<string | null>(null);
-  const [comments, setComments] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-
-  const canSubmit = branchRating > 0 && serviceRating > 0;
-
-  if (submitted) {
-    return (
-      <div className="glass-strong mx-auto max-w-lg rounded-3xl p-8 text-center">
-        <span className="text-5xl">🙌</span>
-        <h2 className="mt-4 text-2xl font-bold">¡Gracias por tu opinión!</h2>
-        <p className="mt-2 text-sm text-carrot-50/70">
-          Tu encuesta ayuda a mejorar el servicio y a reconocer a nuestro equipo. Como agradecimiento, comparte tu
-          experiencia también en Google y recibe un cupón especial.
-        </p>
-        <GoogleReviewLink className="mt-6" />
-      </div>
-    );
-  }
-
-  return (
-    <form
-      className="glass mx-auto max-w-xl space-y-7 rounded-2xl p-6 sm:p-8"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!canSubmit) return;
-        setSubmitting(true);
-        setSubmitError("");
-        try {
-          await submitSurvey({
-            branchRating,
-            serviceRating,
-            cashierId,
-            comments: comments.trim() || null,
-          });
-          setSubmitted(true);
-        } catch (err) {
-          setSubmitError(err instanceof Error ? err.message : "No se pudo enviar tu encuesta. Intenta de nuevo.");
-        } finally {
-          setSubmitting(false);
-        }
-      }}
-    >
-      <div>
-        <p className="mb-2 text-sm font-semibold">¿Cómo calificas la sucursal ({SITE.city})?</p>
-        <StarRating value={branchRating} onChange={setBranchRating} />
-      </div>
-
-      <div>
-        <p className="mb-2 text-sm font-semibold">¿Cómo calificas el servicio recibido?</p>
-        <StarRating value={serviceRating} onChange={setServiceRating} />
-      </div>
-
-      <div>
-        <p className="mb-2 text-sm font-semibold">Vota por tu cajero(a) favorito(a)</p>
-        {cashiersLoading ? (
-          <p className="text-xs text-carrot-50/50">Cargando cajeros...</p>
-        ) : cashiersError ? (
-          <p className="text-xs text-red-400">{cashiersError}</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {cashiers?.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCashierId(c.id)}
-                className={cn(
-                  "rounded-xl p-3 text-center text-xs transition",
-                  cashierId === c.id ? "bg-carrot-500 text-ink-950" : "bg-carrot-50/10 text-carrot-50/75 hover:bg-carrot-50/20"
-                )}
-              >
-                <span className="block text-xl">{c.emoji}</span>
-                <span className="mt-1 block font-semibold">{c.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <p className="mt-2 text-xs text-carrot-50/50">
-          Los votos alimentan el sistema de incentivos y bonos del personal.
-        </p>
-      </div>
-
-      <div>
-        <label className="mb-2 block text-sm font-semibold">Comentarios (opcional)</label>
-        <textarea
-          value={comments}
-          onChange={(e) => setComments(e.target.value)}
-          rows={3}
-          placeholder="Cuéntanos más sobre tu visita..."
-          className="w-full rounded-xl bg-carrot-50/10 px-4 py-2.5 text-sm placeholder:text-carrot-50/40 focus:outline-none focus:ring-2 focus:ring-carrot-400"
-        />
-      </div>
-
-      {submitError && <p className="text-sm text-red-400">{submitError}</p>}
-
-      <button
-        type="submit"
-        disabled={!canSubmit || submitting}
-        className="w-full rounded-full bg-carrot-500 py-3 text-sm font-semibold text-ink-950 transition hover:bg-carrot-400 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {submitting ? "Enviando..." : "Enviar encuesta"}
-      </button>
-    </form>
-  );
-}
-</file>
-
-<file path="src/components/Footer.astro">
----
-import { NAV_LINKS, PORTAL_LINKS, SITE, whatsappLink } from "@/data/site";
----
-
-<footer class="mt-24 px-3 pb-6 sm:px-6">
-  <div class="glass mx-auto max-w-6xl rounded-3xl p-6 sm:p-10">
-    <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-      <div>
-        <div class="flex items-center gap-2">
-          <span class="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-carrot-400 to-leaf-500 text-lg">
-            🥕
-          </span>
-          <span class="font-semibold text-carrot-50">{SITE.name}</span>
-        </div>
-        <p class="mt-3 text-sm text-carrot-50/70">{SITE.tagline}</p>
-        <div class="mt-4 flex gap-2">
-          <a
-            href={SITE.social.instagram}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="glass glass-card rounded-full px-3 py-1.5 text-xs text-carrot-50/80"
-            >Instagram</a
-          >
-          <a
-            href={SITE.social.facebook}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="glass glass-card rounded-full px-3 py-1.5 text-xs text-carrot-50/80"
-            >Facebook</a
-          >
-        </div>
-      </div>
-
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-carrot-300">Explora</p>
-        <ul class="mt-3 space-y-2 text-sm text-carrot-50/75">
-          {NAV_LINKS.map((link) => (
-            <li><a href={link.href} class="hover:text-carrot-200">{link.label}</a></li>
-          ))}
-        </ul>
-      </div>
-
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-carrot-300">Portal interno</p>
-        <ul class="mt-3 space-y-2 text-sm text-carrot-50/75">
-          {PORTAL_LINKS.map((link) => (
-            <li><a href={link.href} class="hover:text-carrot-200">{link.label}</a></li>
-          ))}
-        </ul>
-      </div>
-
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-carrot-300">Visítanos</p>
-        <ul class="mt-3 space-y-2 text-sm text-carrot-50/75">
-          <li>{SITE.address}</li>
-          <li>{SITE.city}, {SITE.state}, {SITE.country}</li>
-          <li>
-            <a href={`tel:+${SITE.phoneE164}`} class="hover:text-carrot-200">{SITE.phoneDisplay}</a>
-          </li>
-          <li>
-            <a href={whatsappLink("¡Hola! Tengo una pregunta")} class="hover:text-carrot-200">WhatsApp</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="mt-8 flex flex-col gap-2 border-t border-carrot-50/10 pt-6 text-xs text-carrot-50/50 sm:flex-row sm:items-center sm:justify-between">
-      <p>© {new Date().getFullYear()} {SITE.name}. Demo funcional con datos de ejemplo.</p>
-      <p>Hecho con 🥕 en {SITE.city}, {SITE.state}</p>
-    </div>
-  </div>
-</footer>
-</file>
-
 <file path="src/components/Navbar.astro">
 ---
 import { NAV_LINKS, PORTAL_LINKS, SITE, whatsappLink } from "@/data/site";
@@ -3979,101 +5868,6 @@ const currentPath = Astro.url.pathname;
     </div>
   </nav>
 </header>
-</file>
-
-<file path="src/data/inventory.ts">
-export type InventoryItem = {
-  ingredient: string;
-  stock: number;
-  unit: string;
-  min: number;
-};
-
-export const INVENTORY: InventoryItem[] = [
-  { ingredient: "Zanahoria fresca", stock: 38, unit: "kg", min: 15 },
-  { ingredient: "Pan artesanal", stock: 6, unit: "paquetes", min: 10 },
-  { ingredient: "Queso crema", stock: 4, unit: "kg", min: 5 },
-  { ingredient: "Aguacate", stock: 22, unit: "kg", min: 8 },
-  { ingredient: "Vasos para jugo", stock: 3, unit: "paquetes", min: 6 },
-  { ingredient: "Pechuga de pollo", stock: 18, unit: "kg", min: 10 },
-];
-
-export function isLowStock(item: InventoryItem) {
-  return item.stock <= item.min;
-}
-</file>
-
-<file path="src/data/plans.ts">
-export type Plan = {
-  id: string;
-  name: string;
-  price: number;
-  period: "mes";
-  emoji: string;
-  perk: string;
-  benefits: string[];
-  highlight?: boolean;
-};
-</file>
-
-<file path="src/data/products.ts">
-export type Category = {
-  id: string;
-  slug: string;
-  name: string;
-  emoji: string;
-};
-
-export type Product = {
-  id: string;
-  name: string;
-  description: string;
-  categorySlug: string;
-  categoryName: string;
-  priceMedium: number | null;
-  priceLarge: number | null;
-};
-
-export type ProductVariant = {
-  id: string;
-  sizeLabel: "Mediano" | "Grande" | null;
-  price: number;
-};
-
-/** Un producto con un solo precio se vende en talla única; con ambos, el cliente elige. */
-export function getVariants(product: Product): ProductVariant[] {
-  const hasBoth = product.priceMedium != null && product.priceLarge != null;
-  const variants: ProductVariant[] = [];
-  if (product.priceMedium != null) {
-    variants.push({ id: `${product.id}--mediano`, sizeLabel: hasBoth ? "Mediano" : null, price: product.priceMedium });
-  }
-  if (product.priceLarge != null) {
-    variants.push({ id: `${product.id}--grande`, sizeLabel: hasBoth ? "Grande" : null, price: product.priceLarge });
-  }
-  return variants;
-}
-
-export function variantDisplayName(product: Product, variant: ProductVariant) {
-  return variant.sizeLabel ? `${product.name} (${variant.sizeLabel})` : product.name;
-}
-
-export function getCheapest(products: Product[], count: number): Product[] {
-  return [...products]
-    .sort((a, b) => (a.priceMedium ?? a.priceLarge ?? 0) - (b.priceMedium ?? b.priceLarge ?? 0))
-    .slice(0, count);
-}
-</file>
-
-<file path="src/data/promotions.ts">
-export type Coupon = {
-  code: string;
-  title: string;
-  description: string;
-  discount: string;
-  discountPercent?: number;
-  validUntil: string;
-  onlyOnline?: boolean;
-};
 </file>
 
 <file path="src/data/site.ts">
@@ -4163,104 +5957,6 @@ export type JobPosition = {
   summary: string;
   responsibilities: string[];
 };
-</file>
-
-<file path="src/data/wholesale.ts">
-export type WholesaleItem = {
-  id: string;
-  name: string;
-  unit: string;
-  pricePerUnit: number;
-  minUnits: number;
-};
-
-export const WHOLESALE_ITEMS: WholesaleItem[] = [
-  { id: "jugos-caja", name: "Jugos prensados en frío (caja x12)", unit: "caja", pricePerUnit: 480, minUnits: 5 },
-  { id: "charolas-bocadillos", name: "Charola de bocadillos saludables", unit: "charola", pricePerUnit: 650, minUnits: 3 },
-  { id: "pasteles-zanahoria", name: "Pastel de zanahoria entero", unit: "pastel", pricePerUnit: 420, minUnits: 2 },
-  { id: "catering-persona", name: "Catering para evento (por persona)", unit: "persona", pricePerUnit: 145, minUnits: 20 },
-  { id: "bowls-oficina", name: "Bowls saludables para oficina", unit: "bowl", pricePerUnit: 119, minUnits: 15 },
-];
-
-export const VOLUME_DISCOUNTS = [
-  { minUnits: 100, discount: 0.15 },
-  { minUnits: 50, discount: 0.1 },
-  { minUnits: 20, discount: 0.05 },
-];
-
-export function discountFor(units: number) {
-  const tier = VOLUME_DISCOUNTS.find((t) => units >= t.minUnits);
-  return tier?.discount ?? 0;
-}
-</file>
-
-<file path="src/hooks/useSupabaseData.ts">
-import { useEffect, useState } from "react";
-
-export function useSupabaseData<T>(fetcher: () => Promise<T>) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetcher()
-      .then((result) => {
-        if (active) setData(result);
-      })
-      .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "No se pudo cargar la información.");
-      });
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return { data, error, loading: data === null && error === null };
-}
-</file>
-
-<file path="src/layouts/Layout.astro">
----
-import Navbar from "@/components/Navbar.astro";
-import Footer from "@/components/Footer.astro";
-import "@/styles/global.css";
-
-interface Props {
-  title: string;
-  description?: string;
-}
-
-const {
-  title,
-  description = "Don Zanahorio — cocina fresca y saludable en Ciudad Victoria, Tamaulipas.",
-} = Astro.props;
----
-
-<html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content={description} />
-    <meta name="generator" content={Astro.generator} />
-    <title>{title} · Don Zanahorio</title>
-  </head>
-  <body>
-    <div class="ambient-bg">
-      <div class="ambient-blob h-[26rem] w-[26rem] bg-carrot-500 -left-20 -top-20"></div>
-      <div class="ambient-blob h-[22rem] w-[22rem] bg-leaf-500 -right-10 top-1/3" style="animation-delay: -6s"></div>
-      <div class="ambient-blob h-[24rem] w-[24rem] bg-carrot-700 left-1/3 -bottom-24" style="animation-delay: -12s"></div>
-    </div>
-
-    <Navbar />
-    <main class="mx-auto min-h-[60vh] max-w-6xl px-3 py-10 sm:px-6 sm:py-16">
-      <slot />
-    </main>
-    <Footer />
-  </body>
-</html>
 </file>
 
 <file path="src/lib/queries.ts">
@@ -4422,6 +6118,40 @@ export async function fetchJobPositions(): Promise<JobPosition[]> {
   }));
 }
 
+export type DeliveryZone = { id: string; name: string; distanceKm: number };
+
+export async function fetchDeliveryZones(): Promise<DeliveryZone[]> {
+  const { data, error } = await supabase
+    .from("delivery_zones")
+    .select("id, name, distance_km")
+    .eq("active", true)
+    .order("name");
+  if (error) throw error;
+  return data.map((row) => ({ id: row.id, name: row.name, distanceKm: Number(row.distance_km) }));
+}
+
+export type ReviewRewardConfig = {
+  discountPercent: number;
+  validDays: number;
+  cooldownDays: number;
+  active: boolean;
+};
+
+export async function fetchReviewRewardConfig(): Promise<ReviewRewardConfig> {
+  const { data, error } = await supabase
+    .from("review_reward_config")
+    .select("discount_percent, valid_days, cooldown_days, active")
+    .eq("id", 1)
+    .single();
+  if (error) throw error;
+  return {
+    discountPercent: Number(data.discount_percent),
+    validDays: data.valid_days,
+    cooldownDays: data.cooldown_days,
+    active: data.active,
+  };
+}
+
 // =========================================================
 // Escrituras (formularios públicos)
 // =========================================================
@@ -4436,6 +6166,8 @@ export async function submitOrder(params: {
   couponCode: string | null;
   total: number;
   items: Array<{ name: string; price: number; qty: number }>;
+  deliveryZoneId?: string | null;
+  distanceKm?: number | null;
 }) {
   const orderId = crypto.randomUUID();
 
@@ -4449,6 +6181,8 @@ export async function submitOrder(params: {
     discount: params.discount,
     coupon_code: params.couponCode,
     total: params.total,
+    delivery_zone_id: params.deliveryZoneId ?? null,
+    distance_km: params.distanceKm ?? null,
   });
   if (orderError) throw orderError;
 
@@ -4476,6 +6210,8 @@ export async function submitWholesaleOrder(params: {
   eventDate: string | null;
   notes: string | null;
   quoteTotal: number;
+  deliveryZoneId?: string | null;
+  shippingCost?: number;
 }) {
   const { error } = await supabase.from("wholesale_orders").insert({
     customer_name: params.customerName,
@@ -4488,27 +6224,104 @@ export async function submitWholesaleOrder(params: {
     event_date: params.eventDate,
     notes: params.notes,
     quote_total: params.quoteTotal,
+    delivery_zone_id: params.deliveryZoneId ?? null,
+    shipping_cost: params.shippingCost ?? 0,
   });
   if (error) throw error;
 }
 
-export async function submitSurvey(params: {
+/**
+ * Replaces submitSurvey: inserts the survey and, server-side in the same
+ * transaction, credits the voted cashier's linked employee when the
+ * service rating clears the configured threshold (section 2.5).
+ */
+export async function submitSurveyWithIncentive(params: {
   branchRating: number;
   serviceRating: number;
   cashierId: string | null;
   comments: string | null;
-}) {
-  const { error } = await supabase.from("surveys").insert({
-    branch_rating: params.branchRating,
-    service_rating: params.serviceRating,
-    cashier_id: params.cashierId,
-    comments: params.comments,
+  contact?: string | null;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc("submit_survey_with_incentive", {
+    p_branch_rating: params.branchRating,
+    p_service_rating: params.serviceRating,
+    p_cashier_id: params.cashierId,
+    p_comments: params.comments,
+    p_contact: params.contact ?? null,
   });
   if (error) throw error;
+  return data as string;
 }
 
-export async function submitGoogleReviewClick() {
-  await supabase.from("google_reviews").insert({});
+export type ReviewReward = { code: string; discountPercent: number; expiresAt: string };
+
+/**
+ * Registers who left the Google review (google_reviews.customer_id) and
+ * issues a personal, single-use coupon in the same transaction.
+ */
+export async function claimGoogleReviewReward(contact: string): Promise<ReviewReward> {
+  const { data, error } = await supabase.rpc("claim_google_review_reward", { p_contact: contact });
+  if (error) {
+    const map: Record<string, string> = {
+      cuenta_no_encontrada: "Necesitas una cuenta de fidelización para recibir el cupón. Regístrate en Fidelización primero.",
+      recompensa_no_disponible: "La recompensa por reseñas no está disponible en este momento.",
+      ya_reclamado_recientemente: "Ya reclamaste este beneficio recientemente. Vuelve a intentarlo más adelante.",
+    };
+    const key = Object.keys(map).find((k) => error.message.includes(k));
+    throw new Error(key ? map[key] : error.message);
+  }
+  return { code: data.code, discountPercent: Number(data.discountPercent), expiresAt: data.expiresAt };
+}
+
+export type CustomerCoupon = {
+  id: string;
+  code: string;
+  title: string;
+  discountPercent: number;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+};
+
+export async function fetchCustomerCoupons(contact: string): Promise<CustomerCoupon[]> {
+  const { data, error } = await supabase.rpc("get_customer_coupons", { p_contact: contact });
+  if (error) throw error;
+  return (data ?? []).map(
+    (row: { id: string; code: string; title: string; discount_percent: number; expires_at: string | null; redeemed_at: string | null }) => ({
+      id: row.id,
+      code: row.code,
+      title: row.title,
+      discountPercent: Number(row.discount_percent),
+      expiresAt: row.expires_at,
+      redeemedAt: row.redeemed_at,
+    })
+  );
+}
+
+export type CouponValidation = {
+  kind: "personal" | "global";
+  code: string;
+  discountPercent: number | null;
+  title: string;
+  discountLabel?: string;
+};
+
+/** Server-side validation: checks ownership, redemption and expiry — the client-side lookup did none of that. */
+export async function validateCoupon(code: string, contact: string | null): Promise<CouponValidation | null> {
+  const { data, error } = await supabase.rpc("validate_coupon", { p_code: code, p_contact: contact });
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    kind: data.kind,
+    code: data.code,
+    discountPercent: data.discountPercent != null ? Number(data.discountPercent) : null,
+    title: data.title,
+    discountLabel: data.discountLabel,
+  };
+}
+
+export async function redeemCustomerCoupon(code: string, orderId: string) {
+  const { error } = await supabase.rpc("redeem_customer_coupon", { p_code: code, p_order_id: orderId });
+  if (error) throw error;
 }
 
 export async function submitJobApplication(params: {
@@ -4718,6 +6531,7 @@ export type AdminSurvey = {
   id: string;
   branchRating: number;
   serviceRating: number;
+  cashierId: string | null;
   cashierName: string | null;
   comments: string | null;
   createdAt: string;
@@ -4726,13 +6540,14 @@ export type AdminSurvey = {
 export async function fetchAdminSurveys(): Promise<AdminSurvey[]> {
   const { data, error } = await supabase
     .from("surveys")
-    .select("id, branch_rating, service_rating, comments, created_at, cashiers(name)")
+    .select("id, branch_rating, service_rating, cashier_id, comments, created_at, cashiers(name)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data.map((row) => ({
     id: row.id,
     branchRating: row.branch_rating,
     serviceRating: row.service_rating,
+    cashierId: row.cashier_id,
     cashierName: (row.cashiers as unknown as { name: string } | null)?.name ?? null,
     comments: row.comments,
     createdAt: row.created_at,
@@ -4882,10 +6697,187 @@ export async function claimReferralBonus(id: string) {
   if (error) throw error;
 }
 
-export async function fetchAdminGoogleReviewsCount(): Promise<number> {
-  const { count, error } = await supabase.from("google_reviews").select("id", { count: "exact", head: true });
+export type AdminGoogleReview = {
+  id: string;
+  customerName: string | null;
+  customerContact: string | null;
+  submittedAt: string;
+  rewardGranted: boolean;
+};
+
+export async function fetchAdminGoogleReviews(): Promise<AdminGoogleReview[]> {
+  const { data, error } = await supabase
+    .from("google_reviews")
+    .select("id, submitted_at, reward_granted, customers(name, email, phone)")
+    .order("submitted_at", { ascending: false });
   if (error) throw error;
-  return count ?? 0;
+  return data.map((row) => {
+    const customer = row.customers as unknown as { name: string; email: string | null; phone: string | null } | null;
+    return {
+      id: row.id,
+      customerName: customer?.name ?? null,
+      customerContact: customer ? customer.email ?? customer.phone : null,
+      submittedAt: row.submitted_at,
+      rewardGranted: row.reward_granted,
+    };
+  });
+}
+
+export async function updateReviewRewardConfig(
+  patch: Partial<{ discountPercent: number; validDays: number; cooldownDays: number; active: boolean }>
+) {
+  const { error } = await supabase
+    .from("review_reward_config")
+    .update({
+      discount_percent: patch.discountPercent,
+      valid_days: patch.validDays,
+      cooldown_days: patch.cooldownDays,
+      active: patch.active,
+    })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+export type AdminDeliveryZone = { id: string; name: string; distanceKm: number; active: boolean };
+
+export async function fetchAdminDeliveryZones(): Promise<AdminDeliveryZone[]> {
+  const { data, error } = await supabase.from("delivery_zones").select("id, name, distance_km, active").order("name");
+  if (error) throw error;
+  return data.map((row) => ({ id: row.id, name: row.name, distanceKm: Number(row.distance_km), active: row.active }));
+}
+
+export async function createDeliveryZone(params: { name: string; distanceKm: number }) {
+  const { error } = await supabase.from("delivery_zones").insert({ name: params.name, distance_km: params.distanceKm });
+  if (error) throw error;
+}
+
+export async function updateDeliveryZone(id: string, patch: { name?: string; distanceKm?: number; active?: boolean }) {
+  const { error } = await supabase
+    .from("delivery_zones")
+    .update({ name: patch.name, distance_km: patch.distanceKm, active: patch.active })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export type AdminCashier = {
+  id: string;
+  name: string;
+  role: string;
+  active: boolean;
+  employeeId: string | null;
+  employeeName: string | null;
+};
+
+export async function fetchAdminCashiers(): Promise<AdminCashier[]> {
+  const { data, error } = await supabase
+    .from("cashiers")
+    .select("id, name, role, active, employee_id, employees(name)")
+    .order("name");
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    name: row.name,
+    role: row.role ?? "",
+    active: row.active,
+    employeeId: row.employee_id,
+    employeeName: (row.employees as unknown as { name: string } | null)?.name ?? null,
+  }));
+}
+
+export async function linkCashierToEmployee(cashierId: string, employeeId: string | null) {
+  const { error } = await supabase.from("cashiers").update({ employee_id: employeeId }).eq("id", cashierId);
+  if (error) throw error;
+}
+
+export type AdminEmployee = { id: string; name: string; role: string; active: boolean };
+
+export async function fetchAdminEmployees(): Promise<AdminEmployee[]> {
+  const { data, error } = await supabase.from("employees").select("id, name, role, active").order("name");
+  if (error) throw error;
+  return data.map((row) => ({ id: row.id, name: row.name, role: row.role, active: row.active }));
+}
+
+export type BonusTransaction = {
+  id: string;
+  employeeId: string;
+  employeeName: string | null;
+  amount: number;
+  type: "survey_incentive" | "payout" | "adjustment";
+  note: string | null;
+  createdAt: string;
+};
+
+export async function fetchAdminBonusLedger(): Promise<BonusTransaction[]> {
+  const { data, error } = await supabase
+    .from("employee_bonus_transactions")
+    .select("id, employee_id, amount, type, note, created_at, employees(name)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    employeeId: row.employee_id,
+    employeeName: (row.employees as unknown as { name: string } | null)?.name ?? null,
+    amount: Number(row.amount),
+    type: row.type,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
+}
+
+/** Used by the staff portal ("Mis bonos") — RLS restricts this to the employee's own ledger. */
+export async function fetchEmployeeBonusLedger(employeeId: string): Promise<BonusTransaction[]> {
+  const { data, error } = await supabase
+    .from("employee_bonus_transactions")
+    .select("id, employee_id, amount, type, note, created_at")
+    .eq("employee_id", employeeId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((row) => ({
+    id: row.id,
+    employeeId: row.employee_id,
+    employeeName: null,
+    amount: Number(row.amount),
+    type: row.type,
+    note: row.note,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function payEmployeeBonus(employeeId: string, amount: number, note?: string | null) {
+  const { error } = await supabase.rpc("pay_employee_bonus", { p_employee_id: employeeId, p_amount: amount, p_note: note ?? null });
+  if (error) throw error;
+}
+
+export type BonusConfig = { minServiceRating: number; amountPerSurvey: number; topVoteAmount: number; active: boolean };
+
+export async function fetchBonusConfig(): Promise<BonusConfig> {
+  const { data, error } = await supabase
+    .from("employee_bonus_config")
+    .select("min_service_rating, amount_per_survey, top_vote_amount, active")
+    .eq("id", 1)
+    .single();
+  if (error) throw error;
+  return {
+    minServiceRating: data.min_service_rating,
+    amountPerSurvey: Number(data.amount_per_survey),
+    topVoteAmount: Number(data.top_vote_amount),
+    active: data.active,
+  };
+}
+
+export async function updateBonusConfig(
+  patch: Partial<{ minServiceRating: number; amountPerSurvey: number; topVoteAmount: number; active: boolean }>
+) {
+  const { error } = await supabase
+    .from("employee_bonus_config")
+    .update({
+      min_service_rating: patch.minServiceRating,
+      amount_per_survey: patch.amountPerSurvey,
+      top_vote_amount: patch.topVoteAmount,
+      active: patch.active,
+    })
+    .eq("id", 1);
+  if (error) throw error;
 }
 
 export type AdminCustomer = {
@@ -5120,589 +7112,6 @@ export async function getJobApplicationCvUrl(path: string): Promise<string> {
 }
 </file>
 
-<file path="src/lib/supabase.ts">
-import { createClient } from "@supabase/supabase-js";
-
-export const supabase = createClient(
-  import.meta.env.PUBLIC_SUPABASE_URL,
-  import.meta.env.PUBLIC_SUPABASE_ANON_KEY
-);
-</file>
-
-<file path="src/lib/utils.ts">
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-export function formatMXN(amount: number) {
-  return amount.toLocaleString("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 0,
-  });
-}
-</file>
-
-<file path="src/pages/carrito.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import CartCheckout from "@/components/islands/CartCheckout";
----
-
-<Layout title="Carrito" description="Revisa tu pedido y elige entrega o recolección en tienda.">
-  <header class="mb-10">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      🛒 Tu carrito
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Finaliza tu pedido</h1>
-  </header>
-
-  <CartCheckout client:load />
-</Layout>
-</file>
-
-<file path="src/pages/empleados.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import EmployeePortal from "@/components/islands/EmployeePortal";
----
-
-<Layout title="Portal de empleados" description="Capacitación, manuales, recomendación de candidatos y bolsa de trabajo.">
-  <header class="mb-8">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      🧑‍🍳 Portal interno
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Portal de empleados</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Capacitación, manuales de puesto, recomendación de candidatos y reclutamiento, compatible con tablets.
-    </p>
-  </header>
-
-  <EmployeePortal client:load />
-</Layout>
-</file>
-
-<file path="src/pages/encuestas.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import SurveyForm from "@/components/islands/SurveyForm";
----
-
-<Layout title="Encuestas" description="Encuesta de satisfacción, evaluación de sucursal y votación de cajero favorito.">
-  <header class="mb-10 text-center">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      📝 Encuesta de satisfacción
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Cuéntanos cómo estuvo tu visita</h1>
-    <p class="mx-auto mt-3 max-w-xl text-sm text-carrot-50/70 sm:text-base">
-      Tu opinión nos ayuda a mejorar y a reconocer al equipo que te atendió.
-    </p>
-  </header>
-
-  <SurveyForm client:load />
-</Layout>
-</file>
-
-<file path="src/pages/fidelizacion.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import LoyaltyDashboard from "@/components/islands/LoyaltyDashboard";
----
-
-<Layout title="Fidelización" description="Programa de puntos, monedero electrónico, gift cards y código QR.">
-  <header class="mb-10">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      💳 Fidelización
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Tu monedero Don Zanahorio</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Acumula mínimo 10% de cada compra en puntos, guarda saldo en tu monedero digital y valida todo con tu código
-      QR personal.
-    </p>
-  </header>
-
-  <LoyaltyDashboard client:load />
-</Layout>
-</file>
-
-<file path="src/pages/mayoreo.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import MayoreoForm from "@/components/islands/MayoreoForm";
----
-
-<Layout title="Pedidos de mayoreo" description="Cotiza pedidos por volumen para eventos, oficinas y negocios.">
-  <header class="mb-10">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      📦 Mayoreo
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Pedidos por volumen</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Ideal para oficinas, eventos y catering. Elige el producto y la cantidad para ver tu cotización automática al
-      instante.
-    </p>
-  </header>
-
-  <MayoreoForm client:load />
-</Layout>
-</file>
-
-<file path="src/pages/menu.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import MenuCatalog from "@/components/islands/MenuCatalog";
----
-
-<Layout title="Menú digital" description="Explora el menú completo de Don Zanahorio y arma tu pedido.">
-  <header class="mb-10">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      🍽️ Menú digital
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Elige, agrega y ordena</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Todo nuestro catálogo, siempre actualizado. Agrega tus platillos favoritos al carrito y finaliza tu pedido
-      para recoger en tienda o recibirlo a domicilio.
-    </p>
-  </header>
-
-  <MenuCatalog client:load />
-</Layout>
-</file>
-
-<file path="src/pages/pos.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import POSIsland from "@/components/islands/POSIsland";
-import { INVENTORY, isLowStock } from "@/data/inventory";
----
-
-<Layout title="Punto de venta" description="Sistema POS táctil para el equipo de Don Zanahorio.">
-  <header class="mb-8">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      🧑‍🍳 Portal interno
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Punto de venta</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Interfaz optimizada para tablets y pantallas táctiles en caja. Requiere inicio de sesión de empleado.
-    </p>
-  </header>
-
-  <POSIsland client:load />
-
-  <section class="glass mt-10 rounded-2xl p-5">
-    <h2 class="text-sm font-semibold uppercase tracking-wider text-carrot-300">Inventario en tiempo real</h2>
-    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {INVENTORY.map((item) => (
-        <div class="glass glass-card flex items-center justify-between rounded-xl p-4">
-          <div>
-            <p class="text-sm font-medium">{item.ingredient}</p>
-            <p class="text-xs text-carrot-50/50">
-              {item.stock} {item.unit} disponibles
-            </p>
-          </div>
-          {isLowStock(item) && (
-            <span class="rounded-full bg-red-500/20 px-2 py-1 text-[10px] font-semibold text-red-300">
-              Stock bajo
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  </section>
-</Layout>
-</file>
-
-<file path="src/pages/promociones.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import PromotionsBoard from "@/components/islands/PromotionsBoard";
-import GoogleReviewLink from "@/components/islands/GoogleReviewLink";
-import { SITE } from "@/data/site";
----
-
-<Layout title="Promociones" description="Cupones automáticos, descuentos exclusivos web y productos destacados.">
-  <header class="mb-10">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      🏷️ Promociones
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Cupones y descuentos vigentes</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Aplica estos cupones directamente en tu carrito. Los descuentos web son exclusivos para pedidos en línea.
-    </p>
-  </header>
-
-  <PromotionsBoard client:load />
-
-  <section class="glass-strong mt-16 rounded-[2rem] px-6 py-12 text-center sm:px-14">
-    <span class="text-4xl">⭐</span>
-    <h2 class="mt-4 text-2xl font-bold sm:text-3xl">Déjanos tu reseña en Google</h2>
-    <p class="mx-auto mt-3 max-w-xl text-sm text-carrot-50/70">
-      Comparte tu experiencia en {SITE.city} y recibe un cupón de 20% para tu próxima visita. Registramos tu reseña
-      para hacerte llegar el beneficio.
-    </p>
-    <GoogleReviewLink client:load className="mt-6" />
-  </section>
-</Layout>
-</file>
-
-<file path="src/pages/suscripciones.astro">
----
-import Layout from "@/layouts/Layout.astro";
-import PlansList from "@/components/islands/PlansList";
----
-
-<Layout title="Suscripciones" description="Membresías mensuales con precio preferencial, validadas por QR o teléfono.">
-  <header class="mb-10">
-    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
-      🔁 Membresías
-    </span>
-    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Suscripciones mensuales</h1>
-    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
-      Precio preferencial todos los días. Se valida con tu código QR o número telefónico, tanto en sucursal como a
-      domicilio.
-    </p>
-  </header>
-
-  <PlansList client:load />
-
-  <p class="mt-8 text-center text-xs text-carrot-50/50">
-    Todos los planes se pueden cancelar en cualquier momento desde tu cuenta de fidelización.
-  </p>
-</Layout>
-</file>
-
-<file path="src/stores/cart.ts">
-import { computed } from "nanostores";
-import { persistentMap } from "@nanostores/persistent";
-
-export type CartLine = {
-  id: string;
-  name: string;
-  price: number;
-  qty: number;
-  emoji: string;
-};
-
-type CartState = Record<string, string>;
-
-export const $cartRaw = persistentMap<CartState>("dz-cart:", {});
-
-function readLine(key: string): CartLine | null {
-  const raw = $cartRaw.get()[key];
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as CartLine;
-  } catch {
-    return null;
-  }
-}
-
-export function getCartLines(): CartLine[] {
-  return Object.keys($cartRaw.get())
-    .map(readLine)
-    .filter((l): l is CartLine => l !== null)
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-export const $cartLines = computed($cartRaw, () => getCartLines());
-
-export const $cartCount = computed($cartLines, (lines) =>
-  lines.reduce((sum, l) => sum + l.qty, 0)
-);
-
-export const $cartTotal = computed($cartLines, (lines) =>
-  lines.reduce((sum, l) => sum + l.qty * l.price, 0)
-);
-
-export function addToCart(item: Omit<CartLine, "qty">, qty = 1) {
-  const existing = readLine(item.id);
-  const nextQty = (existing?.qty ?? 0) + qty;
-  $cartRaw.setKey(item.id, JSON.stringify({ ...item, qty: nextQty }));
-}
-
-export function setQty(id: string, qty: number) {
-  const existing = readLine(id);
-  if (!existing) return;
-  if (qty <= 0) {
-    $cartRaw.setKey(id, undefined as unknown as string);
-    return;
-  }
-  $cartRaw.setKey(id, JSON.stringify({ ...existing, qty }));
-}
-
-export function removeFromCart(id: string) {
-  $cartRaw.setKey(id, undefined as unknown as string);
-}
-
-export function clearCart() {
-  for (const key of Object.keys($cartRaw.get())) {
-    $cartRaw.setKey(key, undefined as unknown as string);
-  }
-}
-</file>
-
-<file path="src/stores/loyalty.ts">
-import { persistentAtom } from "@nanostores/persistent";
-import { atom } from "nanostores";
-import {
-  registerLoyaltyCustomer,
-  lookupLoyaltyCustomer,
-  activateSubscription,
-  type LoyaltySnapshot,
-} from "@/lib/queries";
-
-export type LoyaltyProfile = LoyaltySnapshot;
-
-/** Only remembers *which* contact is signed in on this device — the balances always come from Supabase. */
-export const $loyaltyContact = persistentAtom<string | undefined>("dz-loyalty-contact", undefined);
-export const $loyaltyProfile = atom<LoyaltyProfile | null>(null);
-export const $loyaltyLoading = atom(false);
-
-export async function restoreLoyaltySession() {
-  const contact = $loyaltyContact.get();
-  if (!contact) return;
-  $loyaltyLoading.set(true);
-  try {
-    const snapshot = await lookupLoyaltyCustomer(contact);
-    $loyaltyProfile.set(snapshot);
-    if (!snapshot) $loyaltyContact.set(undefined);
-  } finally {
-    $loyaltyLoading.set(false);
-  }
-}
-
-export async function registerLoyalty(name: string, contact: string, referralCode?: string) {
-  const snapshot = await registerLoyaltyCustomer(name, contact, referralCode);
-  $loyaltyContact.set(contact);
-  $loyaltyProfile.set(snapshot);
-  return snapshot;
-}
-
-export async function loginLoyalty(contact: string) {
-  const snapshot = await lookupLoyaltyCustomer(contact);
-  if (!snapshot) {
-    throw new Error("No encontramos una cuenta con ese correo o teléfono.");
-  }
-  $loyaltyContact.set(contact);
-  $loyaltyProfile.set(snapshot);
-  return snapshot;
-}
-
-export function logoutLoyalty() {
-  $loyaltyContact.set(undefined);
-  $loyaltyProfile.set(null);
-}
-
-export async function activatePlan(planSlug: string) {
-  const contact = $loyaltyContact.get();
-  if (!contact) throw new Error("Necesitas una cuenta de fidelización para activar un plan.");
-  const snapshot = await activateSubscription(contact, planSlug);
-  $loyaltyProfile.set(snapshot);
-  return snapshot;
-}
-</file>
-
-<file path="src/styles/global.css">
-@import "tailwindcss";
-@import "@fontsource-variable/geist";
-
-@theme {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-
-  /* Zanahoria — naranja cálido de marca */
-  --color-carrot-50: #fff4ec;
-  --color-carrot-100: #ffe4cf;
-  --color-carrot-200: #ffc79b;
-  --color-carrot-300: #ffa25e;
-  --color-carrot-400: #ff8a3d;
-  --color-carrot-500: #ff7a1a;
-  --color-carrot-600: #f2620a;
-  --color-carrot-700: #c94b08;
-  --color-carrot-800: #9e3b0d;
-  --color-carrot-900: #7f320f;
-
-  /* Hoja de zanahoria — verde fresco */
-  --color-leaf-50: #eefdf3;
-  --color-leaf-100: #d5f9e0;
-  --color-leaf-200: #adf1c4;
-  --color-leaf-300: #74e29f;
-  --color-leaf-400: #3fca7a;
-  --color-leaf-500: #1fae5f;
-  --color-leaf-600: #148c4c;
-  --color-leaf-700: #126f3f;
-  --color-leaf-800: #125835;
-  --color-leaf-900: #10482d;
-
-  /* Fondo "tierra" profundo para el efecto de vidrio */
-  --color-ink-950: #0f0b09;
-  --color-ink-900: #17110d;
-  --color-ink-800: #241a13;
-  --color-ink-700: #33241a;
-
-  --shadow-glass: 0 8px 32px 0 rgba(15, 11, 9, 0.45);
-  --shadow-glass-lg: 0 24px 64px -12px rgba(15, 11, 9, 0.6);
-}
-
-@layer base {
-  html {
-    color-scheme: dark;
-    scroll-behavior: smooth;
-  }
-
-  body {
-    background-color: var(--color-ink-950);
-    color: var(--color-carrot-50);
-    font-family: var(--font-sans);
-    min-height: 100svh;
-  }
-
-  ::selection {
-    background-color: var(--color-carrot-500);
-    color: var(--color-ink-950);
-  }
-}
-
-@layer components {
-  /* Fondo ambiental con manchas de color desenfocadas, fijo detrás de todo */
-  .ambient-bg {
-    position: fixed;
-    inset: 0;
-    z-index: -10;
-    overflow: hidden;
-    background:
-      radial-gradient(ellipse 80% 60% at 15% 0%, rgba(255, 122, 26, 0.35), transparent 60%),
-      radial-gradient(ellipse 70% 60% at 100% 20%, rgba(31, 174, 95, 0.28), transparent 55%),
-      radial-gradient(ellipse 60% 50% at 50% 100%, rgba(255, 138, 61, 0.2), transparent 60%),
-      var(--color-ink-950);
-  }
-
-  .ambient-blob {
-    position: absolute;
-    border-radius: 999px;
-    filter: blur(90px);
-    opacity: 0.55;
-    animation: float 18s ease-in-out infinite;
-  }
-
-  .glass {
-    background: rgba(255, 244, 236, 0.06);
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border: 1px solid rgba(255, 244, 236, 0.14);
-    box-shadow: var(--shadow-glass);
-  }
-
-  .glass-strong {
-    background: rgba(255, 244, 236, 0.1);
-    backdrop-filter: blur(28px) saturate(150%);
-    -webkit-backdrop-filter: blur(28px) saturate(150%);
-    border: 1px solid rgba(255, 244, 236, 0.18);
-    box-shadow: var(--shadow-glass-lg);
-  }
-
-  .glass-card {
-    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-  }
-
-  .glass-card:hover {
-    transform: translateY(-3px);
-    border-color: rgba(255, 138, 61, 0.4);
-  }
-
-  .text-gradient {
-    background: linear-gradient(100deg, var(--color-carrot-300), var(--color-leaf-300));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-}
-
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(3%, 4%) scale(1.08); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ambient-blob {
-    animation: none;
-  }
-}
-</file>
-
-<file path="src/env.d.ts">
-/// <reference types="astro/client" />
-
-interface ImportMetaEnv {
-  readonly PUBLIC_SUPABASE_URL: string;
-  readonly PUBLIC_SUPABASE_ANON_KEY: string;
-  /** Server-only: never referenced from client components. */
-  readonly STRIPE_SECRET_KEY: string;
-  /** Server-only: shared secret so only our own server can confirm a Stripe payment via mark_order_paid(). */
-  readonly INTERNAL_RPC_SECRET: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
-</file>
-
-<file path="pnpm-workspace.yaml">
-allowBuilds:
-  esbuild: true
-  sharp: true
-minimumReleaseAgeExclude:
-  - astro@7.1.4
-</file>
-
-<file path="README.md">
-# Astro Starter Kit: Minimal
-
-```sh
-pnpm create astro@latest -- --template minimal
-```
-
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
-
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
-
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
-</file>
-
 <file path="src/pages/index.astro">
 ---
 import Layout from "@/layouts/Layout.astro";
@@ -5857,6 +7266,127 @@ const steps = [
     </div>
   </section>
 </Layout>
+</file>
+
+<file path="src/pages/pos.astro">
+---
+import Layout from "@/layouts/Layout.astro";
+import POSIsland from "@/components/islands/POSIsland";
+import { INVENTORY, isLowStock } from "@/data/inventory";
+---
+
+<Layout title="Punto de venta" description="Sistema POS táctil para el equipo de Don Zanahorio.">
+  <header class="mb-8">
+    <span class="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-carrot-200">
+      🧑‍🍳 Portal interno
+    </span>
+    <h1 class="mt-4 text-3xl font-bold sm:text-5xl">Punto de venta</h1>
+    <p class="mt-3 max-w-2xl text-sm text-carrot-50/70 sm:text-base">
+      Interfaz optimizada para tablets y pantallas táctiles en caja. Requiere inicio de sesión de empleado.
+    </p>
+  </header>
+
+  <POSIsland client:load />
+
+  <section class="glass mt-10 rounded-2xl p-5">
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-carrot-300">Inventario en tiempo real</h2>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {INVENTORY.map((item) => (
+        <div class="glass glass-card flex items-center justify-between rounded-xl p-4">
+          <div>
+            <p class="text-sm font-medium">{item.ingredient}</p>
+            <p class="text-xs text-carrot-50/50">
+              {item.stock} {item.unit} disponibles
+            </p>
+          </div>
+          {isLowStock(item) && (
+            <span class="rounded-full bg-red-500/20 px-2 py-1 text-[10px] font-semibold text-red-300">
+              Stock bajo
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  </section>
+</Layout>
+</file>
+
+<file path="src/stores/loyalty.ts">
+import { persistentAtom } from "@nanostores/persistent";
+import { atom } from "nanostores";
+import {
+  registerLoyaltyCustomer,
+  lookupLoyaltyCustomer,
+  activateSubscription,
+  type LoyaltySnapshot,
+} from "@/lib/queries";
+
+export type LoyaltyProfile = LoyaltySnapshot;
+
+/** Only remembers *which* contact is signed in on this device — the balances always come from Supabase. */
+export const $loyaltyContact = persistentAtom<string | undefined>("dz-loyalty-contact", undefined);
+export const $loyaltyProfile = atom<LoyaltyProfile | null>(null);
+export const $loyaltyLoading = atom(false);
+
+export async function restoreLoyaltySession() {
+  const contact = $loyaltyContact.get();
+  if (!contact) return;
+  $loyaltyLoading.set(true);
+  try {
+    const snapshot = await lookupLoyaltyCustomer(contact);
+    $loyaltyProfile.set(snapshot);
+    if (!snapshot) $loyaltyContact.set(undefined);
+  } finally {
+    $loyaltyLoading.set(false);
+  }
+}
+
+export async function registerLoyalty(name: string, contact: string, referralCode?: string) {
+  const snapshot = await registerLoyaltyCustomer(name, contact, referralCode);
+  $loyaltyContact.set(contact);
+  $loyaltyProfile.set(snapshot);
+  return snapshot;
+}
+
+export async function loginLoyalty(contact: string) {
+  const snapshot = await lookupLoyaltyCustomer(contact);
+  if (!snapshot) {
+    throw new Error("No encontramos una cuenta con ese correo o teléfono.");
+  }
+  $loyaltyContact.set(contact);
+  $loyaltyProfile.set(snapshot);
+  return snapshot;
+}
+
+export function logoutLoyalty() {
+  $loyaltyContact.set(undefined);
+  $loyaltyProfile.set(null);
+}
+
+export async function activatePlan(planSlug: string) {
+  const contact = $loyaltyContact.get();
+  if (!contact) throw new Error("Necesitas una cuenta de fidelización para activar un plan.");
+  const snapshot = await activateSubscription(contact, planSlug);
+  $loyaltyProfile.set(snapshot);
+  return snapshot;
+}
+</file>
+
+<file path="src/env.d.ts">
+/// <reference types="astro/client" />
+
+interface ImportMetaEnv {
+  readonly PUBLIC_SUPABASE_URL: string;
+  readonly PUBLIC_SUPABASE_ANON_KEY: string;
+  /** Server-only: never referenced from client components. */
+  readonly STRIPE_SECRET_KEY: string;
+  /** Server-only: shared secret so only our own server can confirm a Stripe payment via mark_order_paid(). */
+  readonly INTERNAL_RPC_SECRET: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
 </file>
 
 <file path="AGENTS.md">

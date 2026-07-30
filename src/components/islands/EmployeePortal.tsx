@@ -8,13 +8,70 @@ import {
   submitEmployeeReferral,
   submitJobApplication,
   uploadJobApplicationCv,
+  fetchEmployeeBonusLedger,
 } from "@/lib/queries";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import StaffLogin from "@/components/islands/StaffLogin";
-import { cn } from "@/lib/utils";
+import { cn, formatMXN } from "@/lib/utils";
 
-type Tab = "capacitacion" | "manuales" | "referidos" | "bolsa";
+type Tab = "capacitacion" | "manuales" | "referidos" | "bolsa" | "bonos";
+
+function BonusPanel({ employeeId }: { employeeId: string }) {
+  const [ledger, setLedger] = useState<Awaited<ReturnType<typeof fetchEmployeeBonusLedger>> | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchEmployeeBonusLedger(employeeId)
+      .then(setLedger)
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar tu historial de bonos."));
+  }, [employeeId]);
+
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
+  if (ledger === null) return <p className="text-sm text-carrot-50/60">Cargando tus bonos...</p>;
+
+  const balance = ledger.reduce((sum, t) => sum + t.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="glass glass-card rounded-2xl p-5">
+        <p className="text-xs font-medium text-carrot-50/60">Saldo acumulado</p>
+        <p className="mt-2 text-2xl font-bold text-carrot-50">{formatMXN(balance)}</p>
+        <p className="mt-1 text-xs text-carrot-50/50">
+          Se abona por cada encuesta con buena calificación de servicio en la que un cliente vote por ti.
+        </p>
+      </div>
+      {ledger.length === 0 ? (
+        <p className="text-sm text-carrot-50/50">Todavía no tienes movimientos.</p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full text-sm">
+            <thead className="border-b border-carrot-50/10 text-left text-[11px] uppercase tracking-wide text-carrot-50/50">
+              <tr>
+                <th className="px-4 py-3 font-medium">Tipo</th>
+                <th className="px-4 py-3 font-medium">Monto</th>
+                <th className="px-4 py-3 font-medium">Nota</th>
+                <th className="px-4 py-3 font-medium">Fecha</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-carrot-50/10">
+              {ledger.map((t) => (
+                <tr key={t.id} className="hover:bg-carrot-50/5">
+                  <td className="px-4 py-3 text-carrot-50/80">
+                    {t.type === "survey_incentive" ? "Encuesta" : t.type === "payout" ? "Pago recibido" : "Ajuste"}
+                  </td>
+                  <td className={cn("px-4 py-3 font-semibold", t.amount < 0 ? "text-red-300" : "text-leaf-300")}>{formatMXN(t.amount)}</td>
+                  <td className="px-4 py-3 text-xs text-carrot-50/60">{t.note ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-carrot-50/50">{new Date(t.createdAt).toLocaleDateString("es-MX")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PositionSelect({
   positions,
@@ -250,6 +307,7 @@ export default function EmployeePortal() {
     { id: "manuales", label: "Manuales y puestos" },
     { id: "referidos", label: "Recomendar candidato" },
     { id: "bolsa", label: "Bolsa de trabajo" },
+    { id: "bonos", label: "Mis bonos" },
   ];
 
   return (
@@ -356,6 +414,7 @@ export default function EmployeePortal() {
 
       {tab === "referidos" && (positions ? <ReferralForm positions={positions} /> : <p className="text-sm text-carrot-50/60">Cargando puestos...</p>)}
       {tab === "bolsa" && (positions ? <JobApplicationForm positions={positions} /> : <p className="text-sm text-carrot-50/60">Cargando puestos...</p>)}
+      {tab === "bonos" && <BonusPanel employeeId={employee.id} />}
     </div>
   );
 }

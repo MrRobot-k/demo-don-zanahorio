@@ -13,11 +13,14 @@ import {
   X,
   Plus,
   UtensilsCrossed,
+  Gift,
+  MapPin,
 } from "lucide-react";
 import { useStaffSession } from "@/hooks/useStaffSession";
 import StaffLogin from "@/components/islands/StaffLogin";
 import { formatMXN, cn } from "@/lib/utils";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { SITE } from "@/data/site";
 import {
   fetchAdminOrders,
   updateOrderStatus,
@@ -31,7 +34,19 @@ import {
   markReferralHired,
   claimReferralBonus,
   type AdminReferral,
-  fetchAdminGoogleReviewsCount,
+  fetchAdminGoogleReviews,
+  fetchReviewRewardConfig,
+  updateReviewRewardConfig,
+  fetchAdminCashiers,
+  linkCashierToEmployee,
+  fetchAdminEmployees,
+  fetchAdminBonusLedger,
+  payEmployeeBonus,
+  fetchBonusConfig,
+  updateBonusConfig,
+  fetchAdminDeliveryZones,
+  createDeliveryZone,
+  updateDeliveryZone,
   fetchAdminCustomers,
   fetchAdminCoupons,
   createCoupon,
@@ -45,10 +60,12 @@ type Section =
   | "resumen"
   | "pedidos"
   | "mayoreo"
+  | "zonas"
   | "encuestas"
   | "clientes"
   | "empleo"
   | "referidos"
+  | "incentivos"
   | "cupones"
   | "productos"
   | "resenas";
@@ -60,6 +77,7 @@ const NAV_GROUPS: { label: string; items: { id: Section; label: string; icon: ty
     items: [
       { id: "pedidos", label: "Pedidos", icon: ShoppingCart },
       { id: "mayoreo", label: "Mayoreo", icon: Package },
+      { id: "zonas", label: "Zonas de entrega", icon: MapPin },
     ],
   },
   {
@@ -75,6 +93,7 @@ const NAV_GROUPS: { label: string; items: { id: Section; label: string; icon: ty
     items: [
       { id: "empleo", label: "Solicitudes de empleo", icon: UserPlus },
       { id: "referidos", label: "Referidos", icon: UserPlus },
+      { id: "incentivos", label: "Incentivos", icon: Gift },
     ],
   },
   {
@@ -90,10 +109,12 @@ const SECTION_LABELS: Record<Section, string> = {
   resumen: "Resumen",
   pedidos: "Pedidos",
   mayoreo: "Pedidos de mayoreo",
+  zonas: "Zonas de entrega",
   encuestas: "Encuestas",
   clientes: "Clientes de fidelización",
   empleo: "Solicitudes de empleo",
   referidos: "Referidos de empleados",
+  incentivos: "Incentivos de personal",
   cupones: "Cupones",
   productos: "Menú y precios",
   resenas: "Reseñas de Google",
@@ -436,13 +457,390 @@ function ReferralsSection() {
   );
 }
 
+function IncentivesSection() {
+  const { data: cashiers, error: cashiersError, loading: cashiersLoading } = useSupabaseData(fetchAdminCashiers);
+  const { data: employees } = useSupabaseData(fetchAdminEmployees);
+  const { data: ledger, error: ledgerError, loading: ledgerLoading } = useSupabaseData(fetchAdminBonusLedger);
+  const { data: config } = useSupabaseData(fetchBonusConfig);
+  const [cashierRows, setCashierRows] = useState(cashiers);
+  const [cfg, setCfg] = useState(config);
+  const [ledgerRows, setLedgerRows] = useState(ledger);
+  const [payForm, setPayForm] = useState({ employeeId: "", amount: "", note: "" });
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  useEffect(() => setCashierRows(cashiers), [cashiers]);
+  useEffect(() => setCfg(config), [config]);
+  useEffect(() => setLedgerRows(ledger), [ledger]);
+
+  async function link(cashierId: string, employeeId: string) {
+    setCashierRows(
+      (prev) =>
+        prev?.map((c) =>
+          c.id === cashierId
+            ? { ...c, employeeId: employeeId || null, employeeName: employees?.find((e) => e.id === employeeId)?.name ?? null }
+            : c
+        ) ?? null
+    );
+    await linkCashierToEmployee(cashierId, employeeId || null).catch(() => {});
+  }
+
+  async function saveConfig() {
+    if (!cfg) return;
+    await updateBonusConfig(cfg).catch(() => {});
+  }
+
+  async function refreshLedger() {
+    const fresh = await fetchAdminBonusLedger().catch(() => null);
+    if (fresh) setLedgerRows(fresh);
+  }
+
+  async function submitPayout(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!payForm.employeeId || !payForm.amount) return;
+    setPaying(true);
+    setPayError("");
+    try {
+      await payEmployeeBonus(payForm.employeeId, Number(payForm.amount), payForm.note.trim() || null);
+      setPayForm({ employeeId: "", amount: "", note: "" });
+      await refreshLedger();
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : "No se pudo registrar el pago.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  const balances = new Map<string, number>();
+  for (const t of ledgerRows ?? []) {
+    balances.set(t.employeeId, (balances.get(t.employeeId) ?? 0) + t.amount);
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Vincular cajero con empleado</h3>
+        {cashiersLoading ? (
+          <p className="text-sm text-carrot-50/50">Cargando cajeros...</p>
+        ) : cashiersError ? (
+          <p className="text-sm text-red-400">{cashiersError}</p>
+        ) : (
+          <Table head={["Cajero(a)", "Empleado vinculado", ""]}>
+            {cashierRows?.map((c) => (
+              <tr key={c.id} className="hover:bg-carrot-50/5">
+                <td className="px-4 py-3 text-carrot-50">{c.name}</td>
+                <td className="px-4 py-3 text-xs text-carrot-50/60">{c.employeeName ?? "Sin vincular"}</td>
+                <td className="px-4 py-3">
+                  <select
+                    value={c.employeeId ?? ""}
+                    onChange={(e) => link(c.id, e.target.value)}
+                    className="rounded-full border border-carrot-50/15 bg-ink-900 px-2 py-1 text-xs text-carrot-50 focus:outline-none focus:ring-1 focus:ring-carrot-400"
+                  >
+                    <option value="" className="bg-ink-900">
+                      Sin vincular
+                    </option>
+                    {employees?.map((e) => (
+                      <option key={e.id} value={e.id} className="bg-ink-900">
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </div>
+
+      {cfg && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Reglas del incentivo</h3>
+          <div className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-4">
+            <label className="text-xs text-carrot-50/60">
+              Calificación mínima
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={cfg.minServiceRating}
+                onChange={(e) => setCfg({ ...cfg, minServiceRating: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+              />
+            </label>
+            <label className="text-xs text-carrot-50/60">
+              Monto por encuesta
+              <input
+                type="number"
+                value={cfg.amountPerSurvey}
+                onChange={(e) => setCfg({ ...cfg, amountPerSurvey: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+              />
+            </label>
+            <label className="text-xs text-carrot-50/60">
+              Bono cajero del mes
+              <input
+                type="number"
+                value={cfg.topVoteAmount}
+                onChange={(e) => setCfg({ ...cfg, topVoteAmount: Number(e.target.value) })}
+                className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={saveConfig}
+              className="mt-auto rounded-full bg-carrot-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-carrot-400"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Registrar pago</h3>
+        <form onSubmit={submitPayout} className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-4">
+          <select
+            required
+            value={payForm.employeeId}
+            onChange={(e) => setPayForm({ ...payForm, employeeId: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-ink-900 px-3 py-2 text-sm text-carrot-50"
+          >
+            <option value="" className="bg-ink-900">
+              Empleado...
+            </option>
+            {employees?.map((e) => (
+              <option key={e.id} value={e.id} className="bg-ink-900">
+                {e.name} · saldo {formatMXN(balances.get(e.id) ?? 0)}
+              </option>
+            ))}
+          </select>
+          <input
+            required
+            type="number"
+            placeholder="Monto"
+            value={payForm.amount}
+            onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40"
+          />
+          <input
+            placeholder="Nota (opcional)"
+            value={payForm.note}
+            onChange={(e) => setPayForm({ ...payForm, note: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40"
+          />
+          <button
+            type="submit"
+            disabled={paying}
+            className="rounded-full bg-leaf-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-leaf-400 disabled:opacity-40"
+          >
+            {paying ? "Registrando..." : "Registrar pago"}
+          </button>
+        </form>
+        {payError && <p className="mt-2 text-xs text-red-400">{payError}</p>}
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-carrot-50/80">Libro mayor de incentivos</h3>
+        {ledgerLoading ? (
+          <p className="text-sm text-carrot-50/50">Cargando movimientos...</p>
+        ) : ledgerError ? (
+          <p className="text-sm text-red-400">{ledgerError}</p>
+        ) : (
+          <Table head={["Empleado", "Tipo", "Monto", "Nota", "Fecha"]}>
+            {ledgerRows?.map((t) => (
+              <tr key={t.id} className="hover:bg-carrot-50/5">
+                <td className="px-4 py-3 text-carrot-50">{t.employeeName ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <Badge tone={t.type === "payout" ? "warn" : "good"}>
+                    {t.type === "survey_incentive" ? "Encuesta" : t.type === "payout" ? "Pago" : "Ajuste"}
+                  </Badge>
+                </td>
+                <td className={cn("px-4 py-3 font-semibold", t.amount < 0 ? "text-red-300" : "text-leaf-300")}>{formatMXN(t.amount)}</td>
+                <td className="px-4 py-3 text-xs text-carrot-50/60">{t.note ?? "—"}</td>
+                <td className="px-4 py-3 text-xs text-carrot-50/50">{new Date(t.createdAt).toLocaleDateString("es-MX")}</td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeliveryZonesSection() {
+  const { data, error, loading } = useSupabaseData(fetchAdminDeliveryZones);
+  const [rows, setRows] = useState(data);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", distanceKm: "" });
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState("");
+  useEffect(() => setRows(data), [data]);
+
+  async function toggle(id: string, active: boolean) {
+    setRows((prev) => prev?.map((z) => (z.id === id ? { ...z, active } : z)) ?? null);
+    await updateDeliveryZone(id, { active }).catch(() => {});
+  }
+
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreating(true);
+    setFormError("");
+    try {
+      await createDeliveryZone({ name: form.name.trim(), distanceKm: Number(form.distanceKm) });
+      setForm({ name: "", distanceKm: "" });
+      setShowForm(false);
+      const fresh = await fetchAdminDeliveryZones();
+      setRows(fresh);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "No se pudo crear la zona.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  if (loading) return <p className="text-sm text-carrot-50/50">Cargando zonas...</p>;
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-1.5 rounded-full bg-carrot-500 px-3.5 py-1.5 text-xs font-semibold text-ink-950 hover:bg-carrot-400"
+        >
+          <Plus size={14} /> Nueva zona
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-3">
+          <input
+            required
+            placeholder="Nombre (colonia o zona)"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40 sm:col-span-2"
+          />
+          <input
+            required
+            type="number"
+            placeholder="Distancia (km)"
+            value={form.distanceKm}
+            onChange={(e) => setForm({ ...form, distanceKm: e.target.value })}
+            className="rounded-xl border border-carrot-50/15 bg-carrot-50/10 px-3 py-2 text-sm text-carrot-50 placeholder:text-carrot-50/40"
+          />
+          {formError && <p className="text-xs text-red-400 sm:col-span-3">{formError}</p>}
+          <button
+            type="submit"
+            disabled={creating}
+            className="rounded-full bg-carrot-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-carrot-400 disabled:opacity-40 sm:col-span-3"
+          >
+            {creating ? "Creando..." : "Crear zona"}
+          </button>
+        </form>
+      )}
+
+      <Table head={["Zona", "Distancia", "Costo estimado", "Activa"]}>
+        {rows?.map((z) => (
+          <tr key={z.id} className="hover:bg-carrot-50/5">
+            <td className="px-4 py-3 text-carrot-50">{z.name}</td>
+            <td className="px-4 py-3 text-xs text-carrot-50/60">{z.distanceKm} km</td>
+            <td className="px-4 py-3 text-xs text-carrot-50/60">
+              {formatMXN(SITE.shipping.baseCost + z.distanceKm * SITE.shipping.perKm)}
+            </td>
+            <td className="px-4 py-3">
+              <button
+                type="button"
+                onClick={() => toggle(z.id, !z.active)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[11px] font-semibold",
+                  z.active ? "bg-leaf-500/15 text-leaf-300" : "bg-carrot-50/10 text-carrot-50/50"
+                )}
+              >
+                {z.active ? "Activa" : "Inactiva"}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </div>
+  );
+}
+
 function ReviewsSection() {
-  const { data, error, loading } = useSupabaseData(fetchAdminGoogleReviewsCount);
+  const { data, error, loading } = useSupabaseData(fetchAdminGoogleReviews);
+  const { data: config } = useSupabaseData(fetchReviewRewardConfig);
+  const [cfg, setCfg] = useState(config);
+  useEffect(() => setCfg(config), [config]);
+
+  async function saveConfig() {
+    if (!cfg) return;
+    await updateReviewRewardConfig(cfg).catch(() => {});
+  }
+
   if (loading) return <p className="text-sm text-carrot-50/50">Cargando...</p>;
   if (error) return <p className="text-sm text-red-400">{error}</p>;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <StatCard label="Clics a reseña de Google" value={data ?? 0} hint="Registrados desde la página de encuestas" />
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Reseñas registradas" value={data?.length ?? 0} />
+        <StatCard label="Con cupón otorgado" value={(data ?? []).filter((r) => r.rewardGranted).length} />
+        <StatCard label="Descuento actual" value={cfg ? `${cfg.discountPercent}%` : "—"} />
+      </div>
+
+      {cfg && (
+        <div className="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-4">
+          <label className="text-xs text-carrot-50/60">
+            % de descuento
+            <input
+              type="number"
+              value={cfg.discountPercent}
+              onChange={(e) => setCfg({ ...cfg, discountPercent: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+            />
+          </label>
+          <label className="text-xs text-carrot-50/60">
+            Días de vigencia
+            <input
+              type="number"
+              value={cfg.validDays}
+              onChange={(e) => setCfg({ ...cfg, validDays: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+            />
+          </label>
+          <label className="text-xs text-carrot-50/60">
+            Días de espera entre reseñas
+            <input
+              type="number"
+              value={cfg.cooldownDays}
+              onChange={(e) => setCfg({ ...cfg, cooldownDays: Number(e.target.value) })}
+              className="mt-1 w-full rounded-lg border border-carrot-50/15 bg-carrot-50/10 px-2 py-1.5 text-sm text-carrot-50"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={saveConfig}
+            className="mt-auto rounded-full bg-carrot-500 px-3 py-2 text-xs font-semibold text-ink-950 hover:bg-carrot-400"
+          >
+            Guardar
+          </button>
+        </div>
+      )}
+
+      <Table head={["Cliente", "Contacto", "Cupón otorgado", "Fecha"]}>
+        {data?.map((r) => (
+          <tr key={r.id} className="hover:bg-carrot-50/5">
+            <td className="px-4 py-3 text-carrot-50">{r.customerName ?? "—"}</td>
+            <td className="px-4 py-3 text-xs text-carrot-50/60">{r.customerContact ?? "—"}</td>
+            <td className="px-4 py-3">
+              <Badge tone={r.rewardGranted ? "good" : "neutral"}>{r.rewardGranted ? "Sí" : "No"}</Badge>
+            </td>
+            <td className="px-4 py-3 text-xs text-carrot-50/50">{new Date(r.submittedAt).toLocaleDateString("es-MX")}</td>
+          </tr>
+        ))}
+      </Table>
     </div>
   );
 }
@@ -808,10 +1206,12 @@ export default function AdminDashboard() {
           {section === "resumen" && <OverviewSection goTo={setSection} />}
           {section === "pedidos" && <OrdersSection />}
           {section === "mayoreo" && <WholesaleSection />}
+          {section === "zonas" && <DeliveryZonesSection />}
           {section === "encuestas" && <SurveysSection />}
           {section === "clientes" && <CustomersSection />}
           {section === "empleo" && <JobApplicationsSection />}
           {section === "referidos" && <ReferralsSection />}
+          {section === "incentivos" && <IncentivesSection />}
           {section === "cupones" && <CouponsSection />}
           {section === "productos" && <ProductsSection />}
           {section === "resenas" && <ReviewsSection />}
